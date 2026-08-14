@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { Cloud, RefreshCw, Waves } from "lucide-react";
+import { Cloud, Network, RefreshCw, Waves } from "lucide-react";
 import {
+  CPAAccountCard,
   OllamaAccountCard,
   OpenGoAccountCard,
 } from "@/components/quota/QuotaCards";
@@ -73,6 +74,7 @@ export default function DashboardPage() {
   const {
     ollamaAccounts,
     openGoAccounts,
+    cpaChannels,
     configReady,
     ollamaLoading,
     openGoLoading,
@@ -84,7 +86,8 @@ export default function DashboardPage() {
     refreshOpenGo,
   } = useQuota();
 
-  const totalCount = ollamaAccounts.length + openGoAccounts.length;
+  const cpaAccountCount = cpaChannels.reduce((total, channel) => total + channel.accounts.length, 0);
+  const totalCount = ollamaAccounts.length + openGoAccounts.length + cpaAccountCount;
   const isEmpty = configReady && totalCount === 0;
 
   if (!configReady) {
@@ -104,7 +107,7 @@ export default function DashboardPage() {
           <button
             type="button"
             className="mx-1 text-cyan-700 underline"
-            onClick={() => navigate("/accounts")}
+            onClick={() => navigate("/admin/accounts")}
           >
             账号管理
           </button>
@@ -145,10 +148,53 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {ollamaAccounts.map((account) => (
             <OllamaAccountCard
-              key={account.account_id || account.name}
+              key={account.public_id}
               account={account}
               loading={ollamaLoading && !ollamaHasData}
             />
+          ))}
+        </div>
+      </AccountSection>
+
+      <AccountSection
+        title="CPA / CLIProxyAPI"
+        icon={<Network className="h-4 w-4" />}
+        description="按渠道展示 Codex 账号套餐与缓存额度"
+        emptyHint="未配置可用的 CPA 渠道或账号"
+        successCount={cpaChannels.reduce(
+          (total, channel) => total + channel.accounts.filter((account) => account.success).length,
+          0
+        )}
+        totalCount={cpaAccountCount}
+        loading={openGoLoading}
+        hasData={cpaAccountCount > 0}
+        onRefresh={() => void refreshOpenGo()}
+      >
+        <div className="space-y-6">
+          {cpaChannels.map((channel) => (
+            <div key={channel.public_id} className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-medium text-slate-800">{channel.name}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  {channel.stale && <Badge variant="warning">渠道缓存已陈旧</Badge>}
+                  <Badge variant={channel.success ? "success" : "danger"}>
+                    {channel.success ? "同步正常" : "同步异常"}
+                  </Badge>
+                </div>
+              </div>
+              {channel.error && !channel.success && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {channel.error}
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {channel.accounts.map((account) => (
+                  <CPAAccountCard key={account.public_id} account={account} />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </AccountSection>
@@ -167,14 +213,9 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {openGoAccounts.map((account) => (
             <OpenGoAccountCard
-              key={account.account_id || account.name}
+              key={account.public_id}
               account={account}
               loading={openGoLoading && !openGoHasData}
-              onClick={
-                account.account_id
-                  ? () => navigate(`/accounts/opencode/${account.account_id}`)
-                  : undefined
-              }
             />
           ))}
         </div>

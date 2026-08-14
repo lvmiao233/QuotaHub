@@ -7,6 +7,7 @@ import {
 } from "@/components/charts/ModelCharts";
 import { useQuota } from "@/contexts/QuotaContext";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -162,6 +163,7 @@ export default function OverviewPage() {
   const {
     ollamaAccounts,
     openGoAccounts,
+    cpaChannels,
     ollamaHasData,
     openGoHasData,
     ollamaLoading,
@@ -178,6 +180,18 @@ export default function OverviewPage() {
   const [dailyLoading, setDailyLoading] = useState(false);
   const [dailyError, setDailyError] = useState("");
   const [dailyView, setDailyView] = useState<"table" | "chart">("chart");
+
+  const cpaSummary = useMemo(() => {
+    const accounts = cpaChannels.flatMap((channel) => channel.accounts);
+    const plans = new Map<string, number>();
+    accounts.forEach((account) => plans.set(account.plan, (plans.get(account.plan) || 0) + 1));
+    return {
+      accountCount: accounts.length,
+      successCount: accounts.filter((account) => account.success).length,
+      staleCount: accounts.filter((account) => account.stale).length,
+      plans: [...plans.entries()],
+    };
+  }, [cpaChannels]);
 
   const ollamaCycles = useMemo(
     () => computeOllamaCycleRemaining(ollamaAccounts),
@@ -260,6 +274,30 @@ export default function OverviewPage() {
           使用统计：{dailyError}
         </div>
       )}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">CPA / CLIProxyAPI 概览</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {cpaSummary.accountCount === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">暂无 CPA 账号快照</p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <Badge variant="default">{cpaChannels.length} 个渠道</Badge>
+              <Badge variant="success">
+                {cpaSummary.successCount}/{cpaSummary.accountCount} 个账号正常
+              </Badge>
+              {cpaSummary.staleCount > 0 && (
+                <Badge variant="warning">{cpaSummary.staleCount} 个缓存已陈旧</Badge>
+              )}
+              {cpaSummary.plans.map(([plan, count]) => (
+                <Badge key={plan} variant="default">{plan} · {count}</Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-3">

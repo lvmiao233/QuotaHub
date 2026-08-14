@@ -3,7 +3,7 @@ name: quotahub
 services:
   quotahub:
     build: .
-    image: quotahub:latest
+    image: ghcr.io/haoyang7/quotahub:latest
     container_name: quotahub
     restart: unless-stopped
     network_mode: host
@@ -11,6 +11,10 @@ services:
       QUOTAHUB_DATA: /data
       QUOTAHUB_LISTEN_HOST: "0.0.0.0"
       QUOTAHUB_LISTEN_PORT: "28787"
+      QUOTAHUB_ADMIN_TOKEN: ${QUOTAHUB_ADMIN_TOKEN:?请在 .env 中设置至少32字符的管理令牌}
+      QUOTAHUB_ENCRYPTION_KEY: ${QUOTAHUB_ENCRYPTION_KEY:?请在 .env 中设置Fernet密钥}
+      QUOTAHUB_COOKIE_SECURE: ${QUOTAHUB_COOKIE_SECURE:-false}
+      QUOTAHUB_LOG_LEVEL: ${QUOTAHUB_LOG_LEVEL:-INFO}
       # 出站 HTTPS 需要代理时填写，例如 http://127.0.0.1:7890
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}

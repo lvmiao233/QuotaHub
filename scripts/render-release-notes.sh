@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version="${1:?用法: render-release-notes.sh <version> [from-tag]}"
+version="${1:?用法: render-release-notes.sh <version> [from-tag] <image>}"
 from_tag="${2:-}"
-image="ghcr.io/lvmiao233/quotahub:${version#v}"
+image_repo="${3:?用法: render-release-notes.sh <version> [from-tag] <image>}"
+image="${image_repo}:${version#v}"
 
 cat <<EOF
 ## 下载说明
@@ -20,6 +21,9 @@ docker run -d --name quotahub \\
   -p 28787:8788 \\
   -v ./data:/data \\
   -e QUOTAHUB_LISTEN_PORT=8788 \\
+  -e QUOTAHUB_ADMIN_TOKEN='<必填：至少 32 字符>' \\
+  -e QUOTAHUB_ENCRYPTION_KEY='<必填：Fernet 密钥>' \\
+  -e QUOTAHUB_COOKIE_SECURE=false \\
   ${image}
 \`\`\`
 
@@ -36,6 +40,9 @@ Linux / macOS：
 \`\`\`bash
 unzip quotahub-${version}-uv.zip
 cd quotahub-${version}
+export QUOTAHUB_ADMIN_TOKEN='<必填：至少 32 字符>'
+export QUOTAHUB_ENCRYPTION_KEY='<必填：Fernet 密钥>'
+export QUOTAHUB_COOKIE_SECURE=false
 ./scripts/start.sh
 \`\`\`
 
@@ -44,6 +51,9 @@ Windows（PowerShell）：
 \`\`\`powershell
 Expand-Archive quotahub-${version}-uv.zip
 cd quotahub-${version}
+\$env:QUOTAHUB_ADMIN_TOKEN='<必填：至少 32 字符>'
+\$env:QUOTAHUB_ENCRYPTION_KEY='<必填：Fernet 密钥>'
+\$env:QUOTAHUB_COOKIE_SECURE='false'
 scripts\\start.bat
 \`\`\`
 
@@ -59,13 +69,19 @@ scripts\\start.bat
 unzip quotahub-${version}-source.zip
 cd quotahub-${version}
 cd frontend && corepack enable && pnpm install --frozen-lockfile && pnpm build && cd ..
+export QUOTAHUB_ADMIN_TOKEN='<必填：至少 32 字符>'
+export QUOTAHUB_ENCRYPTION_KEY='<必填：Fernet 密钥>'
+export QUOTAHUB_COOKIE_SECURE=false
 ./scripts/start.sh          # Linux / macOS
-scripts\\start.bat           # Windows
 \`\`\`
 
 若包内已有 \`frontend/dist\`，可省略前端构建步骤，直接运行 \`./scripts/start.sh\` 或 \`scripts\\start.bat\`。
 
 ---
+
+生产 HTTPS 部署请将 QUOTAHUB_COOKIE_SECURE 设为 true。Fernet 密钥必须长期稳定；升级前停止全部旧实例并备份 SQLite，完成 0.3.0 迁移后再扩容，禁止新旧版本同时运行。
+
+Windows 源码运行请按上方 UV 包示例设置三个必填环境变量。
 
 ## 校验
 

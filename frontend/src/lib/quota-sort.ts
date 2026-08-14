@@ -1,4 +1,4 @@
-import type { OllamaQuotaAccount, QuotaAccount, QuotaWindow } from "@/lib/api";
+import type { OllamaQuotaAccount, PublicQuotaAccount, QuotaWindow } from "@/lib/api";
 import { applyOpenCodeCascade } from "@/lib/utils";
 
 function isOllamaWeeklyExhausted(windows: QuotaWindow[]): boolean {
@@ -19,7 +19,7 @@ export function hasUsableOllamaQuota(account: OllamaQuotaAccount): boolean {
   return false;
 }
 
-export function hasUsableOpenCodeQuota(account: QuotaAccount): boolean {
+export function hasUsableOpenCodeQuota(account: PublicQuotaAccount): boolean {
   if (!account.success || account.error) return false;
   const windows = account.windows ?? [];
   if (windows.length === 0) return false;
@@ -40,7 +40,7 @@ export function sortOllamaAccountsByQuota<T extends OllamaQuotaAccount>(accounts
     .map(({ account }) => account);
 }
 
-export function sortOpenCodeAccountsByQuota<T extends QuotaAccount>(accounts: T[]): T[] {
+export function sortOpenCodeAccountsByQuota<T extends PublicQuotaAccount>(accounts: T[]): T[] {
   return accounts
     .map((account, order) => ({ account, order }))
     .sort((a, b) => {

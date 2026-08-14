@@ -15,6 +15,6 @@ fi
 
 cd "$ROOT/backend"
 uv sync --no-dev --frozen
-exec uv run uvicorn app.main:app \
+exec .venv/bin/uvicorn app.main:app \
   --host "$QUOTAHUB_LISTEN_HOST" \
   --port "$QUOTAHUB_LISTEN_PORT"

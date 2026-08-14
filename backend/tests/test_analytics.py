@@ -18,6 +18,7 @@ def test_plan_multiplier():
 def test_ollama_account_pro_stats():
     stats = ollama_account_pro_stats(
         {
+            "public_id": "ollama-public-a",
             "name": "A",
             "plan": "Max",
             "success": True,
@@ -27,6 +28,8 @@ def test_ollama_account_pro_stats():
     assert stats["multiplier"] == 5
     assert stats["remaining_pro"] == 4.0
     assert stats["capacity_pro"] == 5
+    assert stats["public_id"] == "ollama-public-a"
+    assert "account_id" not in stats
 
 
 def test_apply_opencode_cascade_monthly_blocks_shorter():
@@ -58,6 +61,7 @@ def test_aggregate_opencode_avg():
     summary = aggregate_opencode(
         [
             {
+                "public_id": "open-public-a",
                 "name": "A",
                 "success": True,
                 "windows": [
@@ -65,6 +69,7 @@ def test_aggregate_opencode_avg():
                 ],
             },
             {
+                "public_id": "open-public-b",
                 "name": "B",
                 "success": True,
                 "windows": [
@@ -75,18 +80,25 @@ def test_aggregate_opencode_avg():
     )
     assert summary["avg_effective_remaining"] == 80.0
     assert summary["success_count"] == 2
+    assert [account["public_id"] for account in summary["accounts"]] == [
+        "open-public-a",
+        "open-public-b",
+    ]
+    assert all("account_id" not in account for account in summary["accounts"])
 
 
 def test_aggregate_ollama():
     summary = aggregate_ollama(
         [
             {
+                "public_id": "ollama-public-p",
                 "name": "P",
                 "plan": "Pro",
                 "success": True,
                 "windows": [{"label": LABEL_SESSION, "remaining": 50.0}],
             },
             {
+                "public_id": "ollama-public-m",
                 "name": "M",
                 "plan": "Max",
                 "success": True,

@@ -18,6 +18,10 @@ DEFAULT_SETTINGS_PAYLOAD: dict[str, Any] = {
         "ollama": {"auto_refresh": True, "interval_sec": 300},
         "opencode_go": {"auto_refresh": True, "interval_sec": 60},
     },
+    "quota_sync": {
+        "ollama": {"auto_sync": True, "interval_sec": 1800},
+        "opencode_go": {"auto_sync": True, "interval_sec": 1800},
+    },
     "usage_sync": {
         "auto_sync": True,
         "interval_sec": 300,
@@ -38,6 +42,7 @@ class AccountConfig:
     show_rolling: bool = True
     show_weekly: bool = True
     show_monthly: bool = True
+    enabled: bool = True
 
 
 @dataclass
@@ -46,12 +51,19 @@ class OllamaAccountConfig:
     session_cookie: str
     show_session: bool = True
     show_weekly: bool = True
+    enabled: bool = True
 
 
 @dataclass
 class RefreshSettings:
     auto_refresh: bool = True
     interval_sec: int = 60
+
+
+@dataclass
+class QuotaSyncSettings:
+    auto_sync: bool = True
+    interval_sec: int = 1800
 
 
 @dataclass
@@ -73,6 +85,8 @@ class ServiceConfig:
     listen_port: int
     refresh_ollama: RefreshSettings
     refresh_opencode_go: RefreshSettings
+    quota_sync_ollama: QuotaSyncSettings
+    quota_sync_opencode_go: QuotaSyncSettings
     opencode: OpenCodeSettings
     usage_sync: UsageSyncSettings
 
@@ -85,6 +99,8 @@ class AppConfig:
     ollama_accounts: list[OllamaAccountConfig]
     refresh_ollama: RefreshSettings
     refresh_opencode_go: RefreshSettings
+    quota_sync_ollama: QuotaSyncSettings
+    quota_sync_opencode_go: QuotaSyncSettings
     opencode: OpenCodeSettings
     usage_sync: UsageSyncSettings
 
@@ -127,6 +143,19 @@ def _parse_usage_sync_settings(raw: dict[str, Any] | None) -> UsageSyncSettings:
         interval_sec=interval_sec,
         backfill_pages_per_request=backfill_pages,
         max_pages_per_incremental=max_pages_per_incremental,
+    )
+
+
+def _parse_quota_sync_settings(raw: dict[str, Any] | None) -> QuotaSyncSettings:
+    if not isinstance(raw, dict):
+        return QuotaSyncSettings()
+    try:
+        interval_sec = max(300, int(raw.get("interval_sec", 1800)))
+    except (TypeError, ValueError):
+        interval_sec = 1800
+    return QuotaSyncSettings(
+        auto_sync=bool(raw.get("auto_sync", True)),
+        interval_sec=interval_sec,
     )
 
 
@@ -191,6 +220,9 @@ def extract_settings_payload(raw: dict[str, Any]) -> dict[str, Any]:
     refresh = raw.get("refresh")
     if isinstance(refresh, dict):
         payload["refresh"] = refresh
+    quota_sync = raw.get("quota_sync")
+    if isinstance(quota_sync, dict):
+        payload["quota_sync"] = quota_sync
     usage_sync = raw.get("usage_sync")
     if isinstance(usage_sync, dict):
         payload["usage_sync"] = usage_sync
@@ -201,7 +233,24 @@ def extract_settings_payload(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def merge_settings_with_defaults(payload: dict[str, Any]) -> dict[str, Any]:
-    return _deep_merge(DEFAULT_SETTINGS_PAYLOAD, payload)
+    normalized = dict(payload)
+    if not isinstance(normalized.get("quota_sync"), dict):
+        legacy_refresh = normalized.get("refresh")
+        if isinstance(legacy_refresh, dict):
+            migrated: dict[str, Any] = {}
+            for provider, section in legacy_refresh.items():
+                if provider not in {"ollama", "opencode_go"} or not isinstance(section, dict):
+                    continue
+                try:
+                    interval_sec = max(300, int(section.get("interval_sec", 1800)))
+                except (TypeError, ValueError):
+                    interval_sec = 1800
+                migrated[provider] = {
+                    "auto_sync": bool(section.get("auto_refresh", True)),
+                    "interval_sec": interval_sec,
+                }
+            normalized["quota_sync"] = migrated
+    return _deep_merge(DEFAULT_SETTINGS_PAYLOAD, normalized)
 
 
 def load_settings_payload() -> dict[str, Any]:
@@ -235,12 +284,15 @@ def load_service_config() -> ServiceConfig:
     legacy = _deep_merge(read_optional_config_raw(), read_optional_runtime_config())
     settings = load_settings_payload()
     refresh_raw = settings.get("refresh") if isinstance(settings.get("refresh"), dict) else {}
+    quota_sync_raw = settings.get("quota_sync") if isinstance(settings.get("quota_sync"), dict) else {}
     listen_host, listen_port = _listen_settings_from_legacy(legacy)
     return ServiceConfig(
         listen_host=listen_host,
         listen_port=listen_port,
         refresh_ollama=_parse_refresh_settings(refresh_raw.get("ollama"), default_interval=300),
         refresh_opencode_go=_parse_refresh_settings(refresh_raw.get("opencode_go"), default_interval=60),
+        quota_sync_ollama=_parse_quota_sync_settings(quota_sync_raw.get("ollama")),
+        quota_sync_opencode_go=_parse_quota_sync_settings(quota_sync_raw.get("opencode_go")),
         opencode=_parse_opencode_settings(settings.get("opencode")),
         usage_sync=_parse_usage_sync_settings(settings.get("usage_sync")),
     )
@@ -264,6 +316,20 @@ def update_service_config(updates: dict[str, Any]) -> ServiceConfig:
             refresh_raw[key] = section
         next_payload["refresh"] = refresh_raw
 
+    quota_sync_updates = updates.get("quota_sync")
+    if isinstance(quota_sync_updates, dict):
+        quota_sync_raw = dict(next_payload.get("quota_sync") or {})
+        for key, value in quota_sync_updates.items():
+            if key not in {"ollama", "opencode_go"} or not isinstance(value, dict):
+                continue
+            section = dict(quota_sync_raw.get(key) or {})
+            if value.get("auto_sync") is not None:
+                section["auto_sync"] = bool(value["auto_sync"])
+            if value.get("interval_sec") is not None:
+                section["interval_sec"] = max(300, int(value["interval_sec"]))
+            quota_sync_raw[key] = section
+        next_payload["quota_sync"] = quota_sync_raw
+
     usage_sync_updates = updates.get("usage_sync")
     if isinstance(usage_sync_updates, dict):
         section = dict(next_payload.get("usage_sync") or {})
@@ -279,7 +345,9 @@ def update_service_config(updates: dict[str, Any]) -> ServiceConfig:
             section["usage_server_id"] = str(opencode_updates["usage_server_id"]).strip()
         next_payload["opencode"] = section
 
-    save_settings_payload(next_payload)
+    normalized_next = merge_settings_with_defaults(next_payload)
+    if normalized_next != current:
+        save_settings_payload(normalized_next)
     return load_service_config()
 
 
@@ -304,6 +372,7 @@ def _parse_accounts_from_raw(raw: dict[str, Any]) -> tuple[list[AccountConfig], 
                 show_rolling=bool(item.get("show_rolling", True)),
                 show_weekly=bool(item.get("show_weekly", True)),
                 show_monthly=bool(item.get("show_monthly", True)),
+                enabled=bool(item.get("enabled", True)),
             )
         )
 
@@ -317,6 +386,7 @@ def _parse_accounts_from_raw(raw: dict[str, Any]) -> tuple[list[AccountConfig], 
                 session_cookie=str(item.get("session_cookie") or "").strip(),
                 show_session=bool(item.get("show_session", True)),
                 show_weekly=bool(item.get("show_weekly", True)),
+                enabled=bool(item.get("enabled", True)),
             )
         )
     return opencode_accounts, ollama_accounts
@@ -361,6 +431,8 @@ def load_config() -> AppConfig:
         ollama_accounts=ollama_accounts,
         refresh_ollama=service.refresh_ollama,
         refresh_opencode_go=service.refresh_opencode_go,
+        quota_sync_ollama=service.quota_sync_ollama,
+        quota_sync_opencode_go=service.quota_sync_opencode_go,
         opencode=service.opencode,
         usage_sync=service.usage_sync,
     )

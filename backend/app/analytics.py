@@ -3,9 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from . import db
-from .config import AccountConfig, OllamaAccountConfig
-from .ollama_quota import fetch_all_ollama_quotas
-from .quota import LABEL_MONTHLY, LABEL_ROLLING, LABEL_WEEKLY, fetch_all_quotas
+from .quota import LABEL_MONTHLY, LABEL_ROLLING, LABEL_WEEKLY
 
 LABEL_SESSION = "Session"
 
@@ -77,7 +75,7 @@ def ollama_account_pro_stats(account: dict[str, Any]) -> dict[str, Any]:
     remaining_pct = float(session.get("remaining", 0)) if session else 0.0
     remaining_pro = (remaining_pct / 100.0) * multiplier
     return {
-        "account_id": account.get("account_id"),
+        "public_id": account.get("public_id"),
         "name": account.get("name"),
         "plan": plan,
         "multiplier": multiplier,
@@ -117,7 +115,7 @@ def aggregate_opencode(accounts: list[dict[str, Any]]) -> dict[str, Any]:
             effective_values.append(effective)
         per_account.append(
             {
-                "account_id": account.get("account_id"),
+                "public_id": account.get("public_id"),
                 "name": account.get("name"),
                 "success": account.get("success", False),
                 "effective_remaining": round(effective, 1),
@@ -155,40 +153,25 @@ def aggregate_ollama_models(accounts: list[dict[str, Any]]) -> list[dict[str, An
     ]
 
 
+def aggregate_cpa(channels: list[dict[str, Any]]) -> dict[str, Any]:
+    accounts = [account for channel in channels for account in channel.get("accounts") or []]
+    plans: dict[str, int] = {}
+    for account in accounts:
+        plan = str(account.get("plan") or "未知套餐")
+        plans[plan] = plans.get(plan, 0) + 1
+    return {
+        "channel_count": len(channels),
+        "account_count": len(accounts),
+        "success_count": sum(1 for account in accounts if account.get("success")),
+        "stale_count": sum(1 for account in accounts if account.get("stale")),
+        "plans": plans,
+    }
+
+
 async def build_overview() -> dict[str, Any]:
-    opencode_rows = db.list_opencode_accounts(enabled_only=True)
-    ollama_rows = db.list_ollama_accounts(enabled_only=True)
-
-    opencode_accounts_cfg = [
-        AccountConfig(
-            name=row.name,
-            workspace_id=row.workspace_id,
-            auth_cookie=row.auth_cookie,
-            show_rolling=row.show_rolling,
-            show_weekly=row.show_weekly,
-            show_monthly=row.show_monthly,
-        )
-        for row in opencode_rows
-    ]
-    ollama_accounts_cfg = [
-        OllamaAccountConfig(
-            name=row.name,
-            session_cookie=row.session_cookie,
-            show_session=row.show_session,
-            show_weekly=row.show_weekly,
-        )
-        for row in ollama_rows
-    ]
-
-    opencode_quotas = await fetch_all_quotas(opencode_accounts_cfg) if opencode_accounts_cfg else []
-    ollama_quotas = await fetch_all_ollama_quotas(ollama_accounts_cfg) if ollama_accounts_cfg else []
-
-    opencode_id_by_name = {row.name: row.id for row in opencode_rows}
-    ollama_id_by_name = {row.name: row.id for row in ollama_rows}
-    for item in opencode_quotas:
-        item["account_id"] = opencode_id_by_name.get(item.get("name", ""))
-    for item in ollama_quotas:
-        item["account_id"] = ollama_id_by_name.get(item.get("name", ""))
+    opencode_quotas = db.list_cached_opencode_quotas()
+    ollama_quotas = db.list_cached_ollama_quotas()
+    cpa_channels = db.list_cached_cpa_channels()
 
     ollama_summary = aggregate_ollama(ollama_quotas)
     opencode_summary = aggregate_opencode(opencode_quotas)
@@ -197,5 +180,6 @@ async def build_overview() -> dict[str, Any]:
     return {
         "ollama": ollama_summary,
         "opencode": opencode_summary,
+        "cpa": aggregate_cpa(cpa_channels),
         "ollama_models": model_stats,
     }

@@ -37,10 +37,11 @@ if [[ -d "$root/frontend/dist" ]]; then
 fi
 
 copy_tree "$root/scripts" "$staging/$pkg_name/scripts"
-cp "$root/README.md" "$root/Dockerfile" "$root/config.json.example" "$root/docker-compose.yml.example" "$staging/$pkg_name/"
+cp "$root/README.md" "$root/.env.example" "$root/Dockerfile" "$root/config.json.example" "$root/docker-compose.yml.example" "$staging/$pkg_name/"
 echo "$version" > "$staging/$pkg_name/VERSION"
 
 mkdir -p "$output_dir"
 output_abs="$(cd "$output_dir" && pwd)/${pkg_name}-source.zip"
-( cd "$staging" && zip -rq "$output_abs" "$pkg_name" )
+( cd "$staging" && zip -rq "$output_abs" "$pkg_name" \
+  -x '*/__pycache__/*' '*.py[co]' '*/.DS_Store' )
 echo "已生成: $output_abs"

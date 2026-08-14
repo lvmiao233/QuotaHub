@@ -1,9 +1,10 @@
 [project]
 name = "quota-hub"
-version = "0.2.0"
+version = "0.3.0"
 description = "QuotaHub — coding plan quota viewer"
 requires-python = ">=3.11"
 dependencies = [
+  "cryptography>=45.0.0",
   "fastapi>=0.115.0",
   "httpx>=0.28.0",
   "uvicorn[standard]>=0.34.0",
@@ -14,6 +15,7 @@ quota-hub = "app.main:run"
 
 [dependency-groups]
 dev = [
+  "httpx2>=2.10.0",
   "pytest>=8.0",
   "pytest-asyncio>=0.24",
 ]

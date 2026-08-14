@@ -9,12 +9,9 @@ import {
 } from "react";
 import {
   api,
-  placeholderOllamaAccounts,
-  placeholderOpenGoAccounts,
-  type AppConfigResponse,
   type OllamaQuotaAccount,
-  type QuotaAccount,
-  type RefreshSettings,
+  type PublicCPAChannel,
+  type PublicQuotaAccount,
 } from "@/lib/api";
 import {
   loadOllamaQuotaCache,
@@ -24,15 +21,10 @@ import {
 } from "@/lib/quota-cache";
 import { sortOllamaAccountsByQuota, sortOpenCodeAccountsByQuota } from "@/lib/quota-sort";
 
-const DEFAULT_REFRESH: AppConfigResponse["refresh"] = {
-  ollama: { auto_refresh: true, interval_sec: 300 },
-  opencode_go: { auto_refresh: true, interval_sec: 60 },
-};
-
 type QuotaContextValue = {
   ollamaAccounts: OllamaQuotaAccount[];
-  openGoAccounts: QuotaAccount[];
-  refreshConfig: AppConfigResponse["refresh"];
+  openGoAccounts: PublicQuotaAccount[];
+  cpaChannels: PublicCPAChannel[];
   configReady: boolean;
   ollamaLoading: boolean;
   openGoLoading: boolean;
@@ -43,145 +35,77 @@ type QuotaContextValue = {
   refreshOllama: () => Promise<void>;
   refreshOpenGo: () => Promise<void>;
   refreshAll: () => Promise<void>;
-  reloadRefreshConfig: () => Promise<void>;
 };
 
 const QuotaContext = createContext<QuotaContextValue | null>(null);
 
 export function QuotaProvider({ children }: { children: ReactNode }) {
   const [ollamaAccounts, setOllamaAccounts] = useState<OllamaQuotaAccount[]>(() =>
-    sortOllamaAccountsByQuota(loadOllamaQuotaCache<OllamaQuotaAccount>() ?? [])
+    sortOllamaAccountsByQuota(loadOllamaQuotaCache() ?? [])
   );
-  const [openGoAccounts, setOpenGoAccounts] = useState<QuotaAccount[]>(() =>
-    sortOpenCodeAccountsByQuota(loadOpenCodeQuotaCache<QuotaAccount>() ?? [])
+  const [openGoAccounts, setOpenGoAccounts] = useState<PublicQuotaAccount[]>(() =>
+    sortOpenCodeAccountsByQuota(loadOpenCodeQuotaCache() ?? [])
   );
-  const [refreshConfig, setRefreshConfig] = useState(DEFAULT_REFRESH);
+  const [cpaChannels, setCpaChannels] = useState<PublicCPAChannel[]>([]);
   const [configReady, setConfigReady] = useState(false);
-  const [ollamaLoading, setOllamaLoading] = useState(false);
-  const [openGoLoading, setOpenGoLoading] = useState(false);
-  const [ollamaError, setOllamaError] = useState("");
-  const [openGoError, setOpenGoError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const ollamaHasData = ollamaAccounts.some((a) => a.updated_at || a.error);
-  const openGoHasData = openGoAccounts.some((a) => a.updated_at || a.error);
-
-  const refreshOllama = useCallback(async () => {
-    setOllamaLoading(true);
-    try {
-      const data = sortOllamaAccountsByQuota(await api.ollamaQuota());
-      setOllamaAccounts(data);
-      saveOllamaQuotaCache(data);
-      setOllamaError("");
-    } catch (e) {
-      setOllamaError((e as Error).message);
-    } finally {
-      setOllamaLoading(false);
-    }
-  }, []);
-
-  const refreshOpenGo = useCallback(async () => {
-    setOpenGoLoading(true);
-    try {
-      const data = sortOpenCodeAccountsByQuota(await api.quota());
-      setOpenGoAccounts(data);
-      saveOpenCodeQuotaCache(data);
-      setOpenGoError("");
-    } catch (e) {
-      setOpenGoError((e as Error).message);
-    } finally {
-      setOpenGoLoading(false);
-    }
-  }, []);
+  const ollamaHasData = ollamaAccounts.some((account) => account.updated_at || account.error);
+  const openGoHasData = openGoAccounts.some((account) => account.updated_at || account.error);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([refreshOllama(), refreshOpenGo()]);
-  }, [refreshOllama, refreshOpenGo]);
-
-  const reloadRefreshConfig = useCallback(async () => {
+    setLoading(true);
     try {
-      const cfg = await api.config();
-      setRefreshConfig(cfg.refresh);
-    } catch {
-      /* keep current */
+      const data = await api.publicQuota();
+      const ollama = sortOllamaAccountsByQuota(data.ollama);
+      const opencode = sortOpenCodeAccountsByQuota(data.opencode);
+      setOllamaAccounts(ollama);
+      setOpenGoAccounts(opencode);
+      setCpaChannels(data.cpa_channels);
+      saveOllamaQuotaCache(ollama);
+      saveOpenCodeQuotaCache(opencode);
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+      setConfigReady(true);
     }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const cachedOllama = loadOllamaQuotaCache<OllamaQuotaAccount>();
-      const cachedOpenGo = loadOpenCodeQuotaCache<QuotaAccount>();
-      try {
-        const cfg = await api.config();
-        if (cancelled) return;
-        setRefreshConfig(cfg.refresh);
-        if (!cachedOllama?.length) {
-          setOllamaAccounts(sortOllamaAccountsByQuota(placeholderOllamaAccounts(cfg.ollama_accounts)));
-        }
-        if (!cachedOpenGo?.length) {
-          setOpenGoAccounts(sortOpenCodeAccountsByQuota(placeholderOpenGoAccounts(cfg.opencode_accounts)));
-        }
-      } catch {
-        if (!cancelled) setRefreshConfig(DEFAULT_REFRESH);
-      } finally {
-        if (!cancelled) setConfigReady(true);
-      }
-      if (!cancelled) {
-        void refreshAll();
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const settings: RefreshSettings = refreshConfig.ollama;
-    if (!settings.auto_refresh) return;
-    const id = window.setInterval(() => void refreshOllama(), settings.interval_sec * 1000);
+    void refreshAll();
+    const id = window.setInterval(() => void refreshAll(), 60_000);
     return () => window.clearInterval(id);
-  }, [refreshConfig.ollama, refreshOllama]);
-
-  useEffect(() => {
-    const settings: RefreshSettings = refreshConfig.opencode_go;
-    if (!settings.auto_refresh) return;
-    const id = window.setInterval(() => void refreshOpenGo(), settings.interval_sec * 1000);
-    return () => window.clearInterval(id);
-  }, [refreshConfig.opencode_go, refreshOpenGo]);
+  }, [refreshAll]);
 
   const value = useMemo(
     () => ({
       ollamaAccounts,
       openGoAccounts,
-      refreshConfig,
+      cpaChannels,
       configReady,
-      ollamaLoading,
-      openGoLoading,
-      ollamaError,
-      openGoError,
+      ollamaLoading: loading,
+      openGoLoading: loading,
+      ollamaError: error,
+      openGoError: error,
       ollamaHasData,
       openGoHasData,
-      refreshOllama,
-      refreshOpenGo,
+      refreshOllama: refreshAll,
+      refreshOpenGo: refreshAll,
       refreshAll,
-      reloadRefreshConfig,
     }),
     [
       ollamaAccounts,
       openGoAccounts,
-      refreshConfig,
+      cpaChannels,
       configReady,
-      ollamaLoading,
-      openGoLoading,
-      ollamaError,
-      openGoError,
+      loading,
+      error,
       ollamaHasData,
       openGoHasData,
-      refreshOllama,
-      refreshOpenGo,
       refreshAll,
-      reloadRefreshConfig,
     ]
   );
 
@@ -189,7 +113,7 @@ export function QuotaProvider({ children }: { children: ReactNode }) {
 }
 
 export function useQuota() {
-  const ctx = useContext(QuotaContext);
-  if (!ctx) throw new Error("useQuota must be used within QuotaProvider");
-  return ctx;
+  const value = useContext(QuotaContext);
+  if (!value) throw new Error("useQuota must be used within QuotaProvider");
+  return value;
 }

@@ -1,13 +1,10 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart3, LayoutDashboard, List, Settings, Users } from "lucide-react";
+import { BarChart3, LayoutDashboard, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/", label: "数据概览", icon: BarChart3, end: true },
   { to: "/quota", label: "账号额度", icon: LayoutDashboard },
-  { to: "/usage-all", label: "调用日志", icon: List },
-  { to: "/accounts", label: "账号管理", icon: Users },
-  { to: "/settings", label: "设置", icon: Settings },
 ];
 
 export function AppLayout() {
@@ -37,6 +34,14 @@ export function AppLayout() {
               {label}
             </NavLink>
           ))}
+          <NavLink
+            to="/admin/accounts"
+            aria-label="管理后台"
+            title="管理后台"
+            className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-slate-900"
+          >
+            <Settings className="h-4 w-4" />
+          </NavLink>
         </nav>
       </header>
       <main className="flex-1">

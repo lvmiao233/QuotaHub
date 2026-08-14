@@ -11,6 +11,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_NAME: haoyang7/quotahub
 
 jobs:
   release:
@@ -25,12 +26,14 @@ jobs:
         id: meta
         run: |
           version="${GITHUB_REF_NAME#v}"
-          owner_lc="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          echo "image=${REGISTRY}/${owner_lc}/quotahub" >> "$GITHUB_OUTPUT"
+          echo "image=${REGISTRY}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
           previous_tag="$(git tag --list 'v*' --sort=-v:refname | grep -v "^${GITHUB_REF_NAME}$" | head -n 1 || true)"
           echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Check release version
+        run: python3 scripts/check-version.py "${GITHUB_REF_NAME}"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -38,7 +41,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
@@ -46,6 +49,7 @@ jobs:
         working-directory: frontend
         run: |
           pnpm install --frozen-lockfile
+          pnpm audit --audit-level moderate
           pnpm build
 
       - uses: astral-sh/setup-uv@v5
@@ -56,6 +60,7 @@ jobs:
         working-directory: backend
         run: |
           uv sync --all-groups --frozen
+          uvx --from pip-audit==2.9.0 pip-audit --path .venv/lib/python*/site-packages --progress-spinner off
           uv run python -m pytest -q
 
       - name: Package release assets
@@ -77,18 +82,35 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
-            ${{ steps.meta.outputs.image }}:latest
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+          load: true
+          push: false
+          tags: quotahub:release-candidate
+
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: quotahub:release-candidate
+          scanners: vuln
+          severity: MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          version: v0.73.0
+
+      - name: Push verified image
+        run: |
+          docker tag quotahub:release-candidate "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          docker tag quotahub:release-candidate "${{ steps.meta.outputs.image }}:latest"
+          docker tag quotahub:release-candidate "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
+          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          docker push "${{ steps.meta.outputs.image }}:latest"
+          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
 
       - name: Render release notes
         run: |
           chmod +x scripts/render-release-notes.sh
           ./scripts/render-release-notes.sh \
             "${{ steps.meta.outputs.tag }}" \
-            "${{ steps.meta.outputs.previous_tag }}" > dist/release-notes.md
+            "${{ steps.meta.outputs.previous_tag }}" \
+            "${{ steps.meta.outputs.image }}" > dist/release-notes.md
 
       - uses: softprops/action-gh-release@v2
         with:

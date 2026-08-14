@@ -5,6 +5,10 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class AdminLogin(BaseModel):
+    token: str
+
+
 class OpenCodeAccountCreate(BaseModel):
     name: str
     workspace_id: str = "Default"
@@ -41,6 +45,22 @@ class OllamaAccountUpdate(BaseModel):
     enabled: bool | None = None
 
 
+class CPAChannelCreate(BaseModel):
+    name: str
+    url: str
+    management_key: str
+    enabled: bool = True
+    interval_sec: int = Field(default=1800, ge=300)
+
+
+class CPAChannelUpdate(BaseModel):
+    name: str | None = None
+    url: str | None = None
+    management_key: str | None = None
+    enabled: bool | None = None
+    interval_sec: int | None = Field(default=None, ge=300)
+
+
 class RefreshSettingsResponse(BaseModel):
     auto_refresh: bool
     interval_sec: int
@@ -58,6 +78,11 @@ class RefreshSettingsUpdate(BaseModel):
     interval_sec: int | None = Field(default=None, ge=15)
 
 
+class QuotaSyncSettingsUpdate(BaseModel):
+    auto_sync: bool | None = None
+    interval_sec: int | None = Field(default=None, ge=300)
+
+
 class UsageSyncSettingsUpdate(BaseModel):
     auto_sync: bool | None = None
     interval_sec: int | None = Field(default=None, ge=15)
@@ -71,5 +96,6 @@ class OpenCodeSettingsUpdate(BaseModel):
 
 class ServiceConfigUpdate(BaseModel):
     refresh: dict[str, RefreshSettingsUpdate] | None = None
+    quota_sync: dict[str, QuotaSyncSettingsUpdate] | None = None
     usage_sync: UsageSyncSettingsUpdate | None = None
     opencode: OpenCodeSettingsUpdate | None = None

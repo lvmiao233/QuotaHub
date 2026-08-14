@@ -20,5 +20,5 @@ cd /d "%ROOT%\backend"
 uv sync --no-dev --frozen
 if errorlevel 1 exit /b 1
 
-uv run uvicorn app.main:app --host "%QUOTAHUB_LISTEN_HOST%" --port "%QUOTAHUB_LISTEN_PORT%"
+".venv\Scripts\uvicorn.exe" app.main:app --host "%QUOTAHUB_LISTEN_HOST%" --port "%QUOTAHUB_LISTEN_PORT%"
 exit /b %ERRORLEVEL%

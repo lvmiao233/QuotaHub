@@ -12,6 +12,16 @@
       "interval_sec": 60
     }
   },
+  "quota_sync": {
+    "ollama": {
+      "auto_sync": true,
+      "interval_sec": 1800
+    },
+    "opencode_go": {
+      "auto_sync": true,
+      "interval_sec": 1800
+    }
+  },
   "opencode": {
     "usage_server_id": "bfd684bfc2e4eed05cd0b518f5e4eafd3f3376e3938abb9e536e7c03df831e5c"
   },
@@ -29,7 +39,8 @@
         "auth_cookie": "auth=YOUR_COOKIE_VALUE",
         "show_rolling": true,
         "show_weekly": true,
-        "show_monthly": true
+        "show_monthly": true,
+        "enabled": true
       }
     ],
     "ollama_accounts": [
@@ -37,7 +48,8 @@
         "name": "OllamaAccount1",
         "session_cookie": "aid=YOUR_AID; __Secure-session=YOUR_SESSION_VALUE",
         "show_session": true,
-        "show_weekly": true
+        "show_weekly": true,
+        "enabled": true
       }
     ]
   }

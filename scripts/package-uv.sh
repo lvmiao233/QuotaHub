@@ -18,12 +18,13 @@ mkdir -p "$staging/$pkg_name/backend" "$staging/$pkg_name/frontend" "$staging/$p
 cp -r "$root/backend/app" "$root/backend/pyproject.toml" "$root/backend/uv.lock" "$staging/$pkg_name/backend/"
 cp -r "$root/frontend/dist" "$staging/$pkg_name/frontend/"
 cp "$root/scripts/start.sh" "$root/scripts/start.bat" "$staging/$pkg_name/scripts/"
-cp "$root/config.json.example" "$staging/$pkg_name/"
+cp "$root/README.md" "$root/.env.example" "$root/config.json.example" "$staging/$pkg_name/"
 echo "$version" > "$staging/$pkg_name/VERSION"
 
 chmod +x "$staging/$pkg_name/scripts/start.sh"
 
 mkdir -p "$output_dir"
 output_abs="$(cd "$output_dir" && pwd)/${pkg_name}-uv.zip"
-( cd "$staging" && zip -rq "$output_abs" "$pkg_name" )
+( cd "$staging" && zip -rq "$output_abs" "$pkg_name" \
+  -x '*/__pycache__/*' '*.py[co]' '*/.DS_Store' )
 echo "已生成: $output_abs"

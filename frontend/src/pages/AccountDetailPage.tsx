@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api, type OpenCodeAccount, type QuotaAccount } from "@/lib/api";
+import { api, type AdminQuotaAccount, type OpenCodeAccount } from "@/lib/api";
 
 type DetailTab = "quota" | "usage";
 
@@ -16,7 +16,7 @@ export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<DetailTab>("quota");
   const [account, setAccount] = useState<OpenCodeAccount | null>(null);
-  const [quota, setQuota] = useState<QuotaAccount | null>(null);
+  const [quota, setQuota] = useState<AdminQuotaAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const [quotaLoading, setQuotaLoading] = useState(false);
   const [error, setError] = useState("");
@@ -70,7 +70,7 @@ export default function AccountDetailPage() {
     return (
       <div className="space-y-4">
         <p className="text-sm text-rose-600">账号不存在</p>
-        <Link to="/accounts" className="text-sm text-cyan-700 underline">
+        <Link to="/admin/accounts" className="text-sm text-cyan-700 underline">
           返回账号列表
         </Link>
       </div>
@@ -81,7 +81,7 @@ export default function AccountDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" size="sm" asChild>
-          <Link to="/accounts">
+          <Link to="/admin/accounts">
             <ArrowLeft className="h-4 w-4" />
             返回
           </Link>
@@ -112,9 +112,15 @@ export default function AccountDetailPage() {
         <Card>
           <CardHeader className="flex flex-row items-start justify-between">
             <div>
-              <CardTitle className="text-base">实时额度</CardTitle>
+              <CardTitle className="text-base">缓存额度</CardTitle>
             </div>
-            <Button variant="outline" size="sm" onClick={() => void refreshQuota()} disabled={quotaLoading}>
+            <Button
+              variant="outline"
+              size="sm"
+              title="重新读取后端快照，不触发上游采集"
+              onClick={() => void refreshQuota()}
+              disabled={quotaLoading}
+            >
               <RefreshCw className={`h-4 w-4 ${quotaLoading ? "animate-spin" : ""}`} />
             </Button>
           </CardHeader>

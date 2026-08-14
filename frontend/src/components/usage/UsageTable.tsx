@@ -61,25 +61,6 @@ export function UsageTable({ accountId }: { accountId: string }) {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setSyncing(true);
-      try {
-        await api.syncUsage(accountId);
-        if (!cancelled) await load();
-      } catch (e) {
-        if (!cancelled) setError((e as Error).message);
-      } finally {
-        if (!cancelled) setSyncing(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId]);
-
   const sync = async () => {
     setSyncing(true);
     setError("");

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from . import db
 from .config import (
     _deep_merge,
@@ -10,6 +12,10 @@ from .config import (
     read_optional_runtime_config,
     save_settings_payload,
 )
+from .secrets import admin_token_fingerprint, validate_runtime_secrets
+from .logging_config import get_logger, log_event
+
+logger = get_logger("bootstrap")
 
 
 def ensure_settings_migrated() -> None:
@@ -43,6 +49,7 @@ def ensure_accounts_imported() -> None:
             show_rolling=account.show_rolling,
             show_weekly=account.show_weekly,
             show_monthly=account.show_monthly,
+            enabled=account.enabled,
         )
 
     for account in ollama_accounts:
@@ -53,6 +60,7 @@ def ensure_accounts_imported() -> None:
             session_cookie=account.session_cookie,
             show_session=account.show_session,
             show_weekly=account.show_weekly,
+            enabled=account.enabled,
         )
 
     if opencode_accounts or ollama_accounts:
@@ -60,6 +68,18 @@ def ensure_accounts_imported() -> None:
 
 
 def ensure_bootstrapped() -> None:
+    validate_runtime_secrets()
     db.init_db()
+    db.migrate_account_secrets()
+    sessions_revoked = db.sync_admin_token_fingerprint(admin_token_fingerprint())
+    if sessions_revoked:
+        log_event(
+            logger,
+            logging.INFO,
+            "admin_sessions_revoked",
+            sessions_revoked=True,
+            reason="admin_token_changed",
+        )
+    db.purge_expired_admin_sessions()
     ensure_settings_migrated()
     ensure_accounts_imported()

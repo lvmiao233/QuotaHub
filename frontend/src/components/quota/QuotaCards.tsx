@@ -1,4 +1,10 @@
-import type { OllamaModelUsage, QuotaAccount, QuotaWindow } from "@/lib/api";
+import type {
+  CPAQuotaAccount,
+  OllamaModelUsage,
+  PublicQuotaAccount,
+  QuotaWindow,
+} from "@/lib/api";
+import { useEffect, useState } from "react";
 import {
   applyOpenCodeCascade,
   formatPlanLabel,
@@ -14,9 +20,28 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
+function useResetSeconds(quotaWindow: QuotaWindow): number {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!quotaWindow.reset_at || Number.isNaN(Date.parse(quotaWindow.reset_at))) return;
+    const timer = globalThis.setInterval(() => setNow(Date.now()), 30_000);
+    return () => globalThis.clearInterval(timer);
+  }, [quotaWindow.reset_at]);
+
+  if (quotaWindow.reset_at) {
+    const resetAt = Date.parse(quotaWindow.reset_at);
+    if (!Number.isNaN(resetAt)) {
+      return Math.max(0, Math.ceil((resetAt - now) / 1000));
+    }
+  }
+  return quotaWindow.reset_in_sec;
+}
+
 export function QuotaWindowRow({ window }: { window: QuotaWindow }) {
   const used = Math.round(window.used * 10) / 10;
   const blocked = Boolean(window.blocked);
+  const resetSeconds = useResetSeconds(window);
 
   return (
     <div className={`space-y-2 ${blocked ? "opacity-60" : ""}`}>
@@ -36,7 +61,7 @@ export function QuotaWindowRow({ window }: { window: QuotaWindow }) {
       />
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>{blocked ? opencodeBlockedLabel(window.blocked_by) : `剩余 ${Math.round(window.remaining * 10) / 10}%`}</span>
-        {!blocked && <span>{formatResetIn(window.reset_in_sec)}</span>}
+        {!blocked && <span>{formatResetIn(resetSeconds)}</span>}
       </div>
     </div>
   );
@@ -91,6 +116,7 @@ function OllamaSegmentedBar({ used, models }: { used: number; models: OllamaMode
 function OllamaQuotaWindowRow({ window }: { window: QuotaWindow }) {
   const used = Math.round(window.used * 10) / 10;
   const hasModels = Boolean(window.models && window.models.length > 0);
+  const resetSeconds = useResetSeconds(window);
 
   return (
     <div className="space-y-2">
@@ -107,7 +133,7 @@ function OllamaQuotaWindowRow({ window }: { window: QuotaWindow }) {
       )}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>剩余 {Math.round(window.remaining * 10) / 10}%</span>
-        <span>{formatResetIn(window.reset_in_sec)}</span>
+        <span>{formatResetIn(resetSeconds)}</span>
       </div>
     </div>
   );
@@ -148,6 +174,7 @@ export function OllamaAccountCard({
           </div>
           <div className="flex items-center gap-2">
             {!loading && account.plan && <Badge variant="default">{formatPlanLabel(account.plan)}</Badge>}
+            {!loading && account.stale && <Badge variant="warning">缓存已陈旧</Badge>}
             <Badge variant={loading ? "default" : account.success ? "success" : "danger"}>
               {loading ? "加载中" : account.success ? "正常" : "异常"}
             </Badge>
@@ -184,7 +211,7 @@ export function OpenGoAccountCard({
   loading,
   onClick,
 }: {
-  account: QuotaAccount;
+  account: PublicQuotaAccount;
   loading?: boolean;
   onClick?: () => void;
 }) {
@@ -194,13 +221,14 @@ export function OpenGoAccountCard({
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="text-base">{account.name}</CardTitle>
-            <CardDescription className="mt-1 font-mono text-xs">
-              {account.workspace_id || "—"}
-            </CardDescription>
+            <CardDescription className="mt-1">OpenCode Go</CardDescription>
           </div>
-          <Badge variant={loading ? "default" : account.success ? "success" : "danger"}>
-            {loading ? "加载中" : account.success ? "正常" : "异常"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {!loading && account.stale && <Badge variant="warning">缓存已陈旧</Badge>}
+            <Badge variant={loading ? "default" : account.success ? "success" : "danger"}>
+              {loading ? "加载中" : account.success ? "正常" : "异常"}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -222,6 +250,43 @@ export function OpenGoAccountCard({
               </p>
             )}
           </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function CPAAccountCard({ account }: { account: CPAQuotaAccount }) {
+  return (
+    <Card>
+      <CardHeader className="pb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">{account.account}</CardTitle>
+            <CardDescription className="mt-1">CLIProxyAPI</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="default">{account.plan}</Badge>
+            {account.stale && <Badge variant="warning">缓存已陈旧</Badge>}
+            <Badge variant={account.success ? "success" : "danger"}>
+              {account.success ? "正常" : "异常"}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!account.success && account.error && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {account.error}
+          </div>
+        )}
+        {account.windows.map((window) => (
+          <QuotaWindowRow key={window.label} window={window} />
+        ))}
+        {account.updated_at && (
+          <p className="text-[11px] text-muted-foreground">
+            最近成功采集于 {new Date(account.updated_at).toLocaleString("zh-CN")}
+          </p>
         )}
       </CardContent>
     </Card>

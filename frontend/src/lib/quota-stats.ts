@@ -1,4 +1,4 @@
-import type { OllamaModelUsage, OllamaQuotaAccount, QuotaAccount } from "@/lib/api";
+import type { OllamaModelUsage, OllamaQuotaAccount, PublicQuotaAccount } from "@/lib/api";
 import { applyOpenCodeCascade } from "@/lib/utils";
 
 export type CycleQuota = {
@@ -63,7 +63,7 @@ function sumOllamaCycle(accounts: OllamaQuotaAccount[], label: string): CycleQuo
   };
 }
 
-function sumOpenCodeCycle(accounts: QuotaAccount[], label: string): CycleQuota {
+function sumOpenCodeCycle(accounts: PublicQuotaAccount[], label: string): CycleQuota {
   let remaining = 0;
   let total = 0;
 
@@ -93,7 +93,7 @@ export function computeOllamaCycleRemaining(accounts: OllamaQuotaAccount[]): Cyc
   return OLLAMA_CYCLES.map(({ label }) => sumOllamaCycle(accounts, label));
 }
 
-export function computeOpenCodeCycleRemaining(accounts: QuotaAccount[]): CycleQuota[] {
+export function computeOpenCodeCycleRemaining(accounts: PublicQuotaAccount[]): CycleQuota[] {
   return OPENCODE_CYCLES.map(({ label }) => sumOpenCodeCycle(accounts, label));
 }
 

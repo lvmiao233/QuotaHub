@@ -100,21 +100,42 @@ def build_ollama_cookie_header(session_cookie: str) -> str:
     return cookie.rstrip(";")
 
 
+_CLOUD_USAGE_START = re.compile(
+    r"(?:<h2[^>]*>\s*Cloud usage\s*</h2>|<span>\s*Cloud usage\s*</span>)",
+    re.IGNORECASE,
+)
+_CLOUD_USAGE_END = re.compile(
+    r'<form[^>]*action="/settings"[^>]*>.*?name="notify-usage-limits"'
+    r"|<script>\s*function applyLocalTimeTitles",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
 def _extract_cloud_usage_block(html: str) -> str:
+    start = _CLOUD_USAGE_START.search(html)
+    if not start:
+        raise ValueError("页面中未找到 Cloud usage 区块（可能未登录或页面结构已变更）")
+    rest = html[start.end() :]
+    end = _CLOUD_USAGE_END.search(rest)
+    if end:
+        return rest[: end.start()]
+    legacy = re.search(r"(.*?)</div>\s*<script>", rest, re.DOTALL | re.IGNORECASE)
+    if legacy:
+        return legacy.group(1)
+    return rest[:50_000]
+
+
+def _parse_plan(html: str) -> str:
     match = re.search(
-        r"<span>Cloud usage</span>(.*?)</div>\s*<script>",
+        r"Usage credits.*?rounded-full[^>]*capitalize[^>]*>\s*([^<]+?)\s*</span",
         html,
         re.DOTALL | re.IGNORECASE,
     )
-    if not match:
-        raise ValueError("页面中未找到 Cloud usage 区块（可能未登录或页面结构已变更）")
-    return match.group(1)
-
-
-def _parse_plan(block: str) -> str:
+    if match:
+        return match.group(1).strip()
     match = re.search(
         r'rounded-full[^>]*capitalize[^>]*>\s*([^<]+?)\s*</span',
-        block,
+        html,
         re.IGNORECASE,
     )
     return match.group(1).strip() if match else ""
@@ -252,8 +273,8 @@ def parse_ollama_quota_html(html: str, now: datetime) -> tuple[str, list[OllamaQ
         if "Cloud usage" not in html:
             raise ValueError("未登录或 cookie 无效")
 
+    plan = _parse_plan(html)
     block = _extract_cloud_usage_block(html)
-    plan = _parse_plan(block)
     tracks = _parse_usage_tracks(block)
     status_texts = _parse_period_headers(block)
     resets = _parse_reset_info(block)

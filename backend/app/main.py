@@ -4,6 +4,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -16,7 +17,7 @@ from .analytics import build_overview
 from .config import load_config, load_service_config, mask_cookie, mask_ollama_cookie, update_service_config
 from .ollama_quota import fetch_all_ollama_quotas
 from .opencode_usage import resolve_account_workspace_id
-from .quota import fetch_all_quotas, fetch_quota_for_account
+from .quota import build_cookie_header, fetch_all_quotas, fetch_go_status, fetch_quota_for_account
 from .schemas import (
     OllamaAccountCreate,
     OllamaAccountUpdate,
@@ -206,11 +207,14 @@ async def test_opencode_account(account_id: str) -> dict[str, Any]:
     if row is None:
         raise HTTPException(status_code=404, detail="账号不存在")
     try:
-        workspace_id = await resolve_account_workspace_id(
+        workspace_id = resolve_account_workspace_id(
             row.workspace_id,
             row.auth_cookie,
             row.resolved_workspace_id,
         )
+        cookie_header = build_cookie_header(row.auth_cookie)
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=False) as client:
+            await fetch_go_status(client, workspace_id, cookie_header)
         db.update_opencode_account(account_id, resolved_workspace_id=workspace_id)
         return {"success": True, "workspace_id": workspace_id}
     except Exception as exc:
@@ -226,7 +230,7 @@ async def opencode_account_quota(account_id: str) -> dict[str, Any]:
 
     account = AccountConfig(
         name=row.name,
-        workspace_id=row.workspace_id,
+        workspace_id=row.resolved_workspace_id or row.workspace_id,
         auth_cookie=row.auth_cookie,
         show_rolling=row.show_rolling,
         show_weekly=row.show_weekly,

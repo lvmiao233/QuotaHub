@@ -20,7 +20,7 @@ function OpenCodeForm({
   onCancel: () => void;
 }) {
   const [name, setName] = useState(initial?.name || "");
-  const [workspaceId, setWorkspaceId] = useState(initial?.workspace_id || "Default");
+  const [workspaceId, setWorkspaceId] = useState(initial?.workspace_id || "");
   const [authCookie, setAuthCookie] = useState(initial?.auth_cookie || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -57,16 +57,21 @@ function OpenCodeForm({
           <Input id="oc-name" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="oc-ws">工作区 ID / 名称</Label>
-          <Input id="oc-ws" value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)} />
+          <Label htmlFor="oc-ws">组织 ID（wrk_…）</Label>
+          <Input
+            id="oc-ws"
+            value={workspaceId}
+            onChange={(e) => setWorkspaceId(e.target.value)}
+            placeholder="wrk_01KE6TCEZM2BRT6XWCR3K7TADE"
+          />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="oc-cookie">auth Cookie{initial?.id ? "（留空则不修改）" : ""}</Label>
+          <Label htmlFor="oc-cookie">Console Cookie{initial?.id ? "（留空则不修改）" : ""}</Label>
           <Textarea
             id="oc-cookie"
             value={authCookie}
             onChange={(e) => setAuthCookie(e.target.value)}
-            placeholder="auth=Fe26.2**..."
+            placeholder="__Host-console_session=st_…（可附带 auth=…）"
           />
         </div>
         {error && <p className="text-sm text-rose-600">{error}</p>}

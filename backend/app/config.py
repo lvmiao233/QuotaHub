@@ -334,7 +334,7 @@ def load_config() -> AppConfig:
     opencode_accounts = [
         AccountConfig(
             name=row.name,
-            workspace_id=row.workspace_id,
+            workspace_id=row.resolved_workspace_id or row.workspace_id,
             auth_cookie=row.auth_cookie,
             show_rolling=row.show_rolling,
             show_weekly=row.show_weekly,
@@ -379,6 +379,10 @@ def mask_cookie(cookie: str) -> str:
         return ""
     if value.lower().startswith("cookie:"):
         value = value[7:].strip()
+    for part in value.split(";"):
+        part = part.strip()
+        if part.startswith("__Host-console_session="):
+            return _mask_secret(part.split("=", 1)[1], "__Host-console_session=")
     auth = value
     if "auth=" in value:
         for part in value.split(";"):

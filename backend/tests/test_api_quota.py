@@ -11,8 +11,8 @@ def test_opencode_account_quota_returns_dict(temp_data_dir):
     client = TestClient(app)
     row = db.create_opencode_account(
         name="Test",
-        workspace_id="Default",
-        auth_cookie="auth=testcookie",
+        workspace_id="wrk_test",
+        auth_cookie="__Host-console_session=st_test",
     )
     mock_quota = QuotaAccount(
         index=0,

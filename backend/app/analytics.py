@@ -162,7 +162,7 @@ async def build_overview() -> dict[str, Any]:
     opencode_accounts_cfg = [
         AccountConfig(
             name=row.name,
-            workspace_id=row.workspace_id,
+            workspace_id=row.resolved_workspace_id or row.workspace_id,
             auth_cookie=row.auth_cookie,
             show_rolling=row.show_rolling,
             show_weekly=row.show_weekly,

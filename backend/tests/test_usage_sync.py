@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app import db
+from app.opencode_usage import ParsedUsageRecord, RequestLogsPage
 from app.usage_sync import sync_usage_incremental
-from app.opencode_usage import ParsedUsageRecord
 
 
 def _record(usg_id: str) -> ParsedUsageRecord:
@@ -25,36 +25,27 @@ def _record(usg_id: str) -> ParsedUsageRecord:
 def account(temp_data_dir):
     return db.create_opencode_account(
         name="sync-test",
-        workspace_id="Default",
-        auth_cookie="auth=t",
+        workspace_id="wrk_test",
+        auth_cookie="__Host-console_session=st_test",
     )
 
 
 @pytest.mark.asyncio
 async def test_incremental_stops_on_duplicate_page(account, monkeypatch):
-    page_data = {
-        0: [_record("usg_new1"), _record("usg_new2")],
-        1: [],
-    }
+    pages = [
+        RequestLogsPage(records=[_record("log-1"), _record("log-2")], next_cursor=None),
+    ]
+    fetch_mock = AsyncMock(side_effect=pages)
 
-    async def fake_fetch(**kwargs):
-        page = kwargs.get("page", 0)
-        return page_data.get(page, [])
-
-    monkeypatch.setattr(
-        "app.usage_sync.fetch_usage_page",
-        AsyncMock(side_effect=fake_fetch),
-    )
-    monkeypatch.setattr(
-        "app.usage_sync.resolve_account_workspace_id",
-        AsyncMock(return_value="wrk_test"),
-    )
-
+    monkeypatch.setattr("app.usage_sync.fetch_request_logs_page", fetch_mock)
     result = await sync_usage_incremental(account)
     assert result.inserted == 2
     assert result.pages_fetched == 1
 
-    page_data[0] = [_record("usg_new1"), _record("usg_new2")]
+    fetch_mock.reset_mock()
+    fetch_mock.side_effect = [
+        RequestLogsPage(records=[_record("log-1"), _record("log-2")], next_cursor=None),
+    ]
     result2 = await sync_usage_incremental(account)
     assert result2.inserted == 0
     assert result2.pages_fetched == 1

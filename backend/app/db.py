@@ -110,6 +110,10 @@ def init_db() -> None:
             );
             """
         )
+        try:
+            conn.execute("ALTER TABLE usage_sync_state ADD COLUMN logs_cursor TEXT")
+        except sqlite3.OperationalError:
+            pass
 
 
 @dataclass
@@ -220,6 +224,7 @@ class UsageSyncStateRow:
     total_records: int
     oldest_record_at: str | None
     newest_record_at: str | None
+    logs_cursor: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -231,6 +236,7 @@ class UsageSyncStateRow:
             "total_records": self.total_records,
             "oldest_record_at": self.oldest_record_at,
             "newest_record_at": self.newest_record_at,
+            "logs_cursor": self.logs_cursor,
         }
 
     @classmethod
@@ -246,7 +252,10 @@ class UsageSyncStateRow:
                 total_records=0,
                 oldest_record_at=None,
                 newest_record_at=None,
+                logs_cursor=None,
             )
+        keys = row.keys()
+        logs_cursor = row["logs_cursor"] if "logs_cursor" in keys else None
         return cls(
             account_id=account_id,
             last_sync_at=row["last_sync_at"],
@@ -257,6 +266,7 @@ class UsageSyncStateRow:
             total_records=int(row["total_records"]),
             oldest_record_at=row["oldest_record_at"],
             newest_record_at=row["newest_record_at"],
+            logs_cursor=logs_cursor,
         )
 
 
@@ -665,6 +675,7 @@ def update_usage_sync_state(account_id: str, **fields: Any) -> None:
         "total_records",
         "oldest_record_at",
         "newest_record_at",
+        "logs_cursor",
     }
     updates: list[str] = []
     values: list[Any] = []

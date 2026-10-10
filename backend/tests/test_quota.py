@@ -1,49 +1,76 @@
 from datetime import UTC, datetime
 
-from app.opencode_usage import parse_usage_response
-from app.quota import build_cookie_header, parse_quota_html
+from app.opencode_usage import parse_request_log_item, parse_request_logs_payload
+from app.quota import build_cookie_header, parse_go_status_payload
 
 
-SAMPLE_USAGE_RESPONSE = """
-$R[26]={id:"usg_01KX2Z5HDXVJ9MGSBPF2WYQZCQ",workspaceID:"wrk_01KVZAXQQS6ZJ6D5W2195DY9W8",
-timeCreated:$R[27]=new Date("2026-07-09T08:16:06.000Z"),timeUpdated:$R[28]=new Date("2026-07-09T08:16:06.086Z"),
-timeDeleted:null,model:"glm-5.2",provider:"deepinfra-glm-5.2",inputTokens:78675,outputTokens:177,
-cost:11092380,keyID:"key_01KVZDHTH6F9NCZW5AMFB7RMCJ",sessionID:"",enrichment:$R[29]={plan:"lite"}}
-"""
+def test_build_cookie_header_session():
+    assert build_cookie_header("st_abc") == "__Host-console_session=st_abc"
 
 
-def test_build_cookie_header_raw_value():
-    assert build_cookie_header("abc123") == "auth=abc123"
+def test_build_cookie_header_preserves_parts():
+    cookie = "__Host-console_session=st_x; auth=Fe26.2**token"
+    assert "auth=" in build_cookie_header(cookie)
+    assert "__Host-console_session=" in build_cookie_header(cookie)
 
 
-def test_build_cookie_header_full_cookie():
-    assert build_cookie_header("auth=token123; other=x") == "auth=token123"
-
-
-def test_parse_quota_html():
-    html = """
-    rollingUsage: $R[0] = { usagePercent: 12.5, resetInSec: 3600 }
-    weeklyUsage: $R[0] = { usagePercent: 40, resetInSec: 86400 }
-    monthlyUsage: $R[0] = { usagePercent: 75.2, resetInSec: 1209600 }
-    """
-    now = datetime(2026, 6, 25, 12, 0, 0, tzinfo=UTC)
-    windows = parse_quota_html(html, now)
+def test_parse_go_status_payload():
+    payload = {
+        "access": {
+            "meters": {
+                "fiveHour": {
+                    "limitMicroCents": "1200000000",
+                    "usedMicroCents": "0",
+                    "resetsAt": None,
+                },
+                "week": {
+                    "limitMicroCents": "3000000000",
+                    "usedMicroCents": "1500000000",
+                    "resetsAt": "2026-10-12T00:00:00.000Z",
+                },
+                "month": {
+                    "limitMicroCents": "6000000000",
+                    "usedMicroCents": "3000000000",
+                    "resetsAt": "2026-10-27T12:20:30.000Z",
+                },
+            }
+        }
+    }
+    now = datetime(2026, 10, 10, 4, 0, 0, tzinfo=UTC)
+    windows = parse_go_status_payload(payload, now)
     assert len(windows) == 3
     assert windows[0].label == "5h Rolling"
-    assert windows[0].used == 12.5
-    assert windows[1].used == 40
-    assert windows[2].used == 75.2
+    assert windows[0].used == 0.0
+    assert windows[1].used == 50.0
+    assert windows[2].used == 50.0
+    assert windows[1].reset_in_sec > 0
 
 
-def test_parse_usage_response():
-    records = parse_usage_response(SAMPLE_USAGE_RESPONSE)
-    assert len(records) == 1
-    record = records[0]
-    assert record.usg_id == "usg_01KX2Z5HDXVJ9MGSBPF2WYQZCQ"
-    assert record.model == "glm-5.2"
-    assert record.input_tokens == 78675
-    assert record.output_tokens == 177
-    assert record.cost_raw == 11092380
-    assert abs(record.cost_usd - 0.01109238) < 1e-9
-    assert record.key_id == "key_01KVZDHTH6F9NCZW5AMFB7RMCJ"
-    assert record.plan == "lite"
+def test_parse_request_logs_payload():
+    payload = {
+        "items": [
+            {
+                "id": "b6ddb01a-3204-455f-85a8-654e227a0f57",
+                "startedAt": 1791604010180,
+                "model": "deepseek-v4-flash",
+                "provider": "opencode",
+                "inputTokens": 84,
+                "outputTokens": 21,
+                "cost": 0.0000252,
+                "serviceAPIKeyID": "key_01",
+                "product": "go",
+            }
+        ],
+        "nextCursor": '{"v":2}',
+    }
+    page = parse_request_logs_payload(payload)
+    assert len(page.records) == 1
+    assert page.records[0].usg_id.startswith("b6ddb01a")
+    assert page.records[0].cost_usd == 0.0000252
+    assert page.next_cursor == '{"v":2}'
+
+
+def test_parse_request_log_item():
+    item = parse_request_log_item({"id": "x", "startedAt": 1791604010180, "cost": 1.0})
+    assert item is not None
+    assert item.cost_raw == 1_000_000_000

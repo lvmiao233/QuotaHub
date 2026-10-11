@@ -51,16 +51,16 @@ docker compose up -d --build --force-recreate
 要求：Python >= 3.11，已安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)。
 
 ```bash
-unzip quotahub-v0.2.0-uv.zip
-cd quotahub-v0.2.0
+unzip quotahub-v0.3.0-uv.zip
+cd quotahub-v0.3.0
 ./scripts/start.sh
 ```
 
 Windows（PowerShell）：
 
 ```powershell
-Expand-Archive quotahub-v0.2.0-uv.zip
-cd quotahub-v0.2.0
+Expand-Archive quotahub-v0.3.0-uv.zip
+cd quotahub-v0.3.0
 scripts\start.bat
 ```
 
@@ -115,6 +115,14 @@ volumes:
 导入完成后可去掉 `config.json` 挂载；账号与设置在 SQLite 中维护，不再依赖配置文件。
 
 
+### 从 v0.2.x 升级
+
+数据库结构无变更。升级到 **v0.3.0** 后请在「账号管理」中检查并更新账号凭证（见下文），否则额度或调用日志可能拉取失败。
+
+- **OpenCode Go**：必须填写 Console 的 `__Host-console_session` 与 `wrk_…` 组织 ID；仅保存旧版 `auth=` 已无法使用。
+- **Ollama**：若额度解析失败，确认 Cookie 仍有效；settings 页 DOM 变更已在 v0.3.0 适配。
+
+
 ## 配置说明
 
 运行时**不再依赖** `config.json`，配置在「设置」页面修改，后续变更将保存到 SQLite。
@@ -127,6 +135,25 @@ volumes:
 | `config.json`（可选，仅迁移用） | 首次导入账号与旧版设置 |
 
 `import_accounts` 块或顶层账号字段仅在首次导入时读取，完成后写入 `/data/.imported`。
+
+
+### OpenCode Go 账号（UI：账号 → OpenCode）
+
+在 [OpenCode Console](https://opencode.ai) 登录后，打开对应组织的 Go 页面（地址形如 `https://opencode.ai/console/wrk_…/go`）。
+
+| 字段 | 填写内容 |
+|------|--------|
+| 组织 ID（`wrk_…`） | 地址栏里的 `wrk_` 开头 ID，与 Console 请求头 `x-org-id` 一致 |
+| Console Cookie | 至少包含 `__Host-console_session=st_…`。浏览器 F12 → Network → 任意 `console/api` 请求 → 复制 Cookie 中该字段即可（可附带 `auth=`，非必须） |
+
+保存后可用「测试连接」或刷新额度验证。Session 过期后需重新复制 Cookie。
+
+
+### Ollama 账号（UI：账号 → Ollama）
+
+| 字段 | 填什么 |
+|------|--------|
+| Session Cookie | 登录 [ollama.com/settings](https://ollama.com/settings) 后，复制 `aid=…` 与 `__Secure-session=…`（整段 Cookie 或仅 session 值均可） |
 
 
 ## API 概览

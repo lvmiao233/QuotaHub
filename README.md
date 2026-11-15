@@ -41,6 +41,8 @@ docker compose up -d --build --force-recreate
 
 浏览器打开 http://localhost:28787 （端口由 `QUOTAHUB_LISTEN_PORT` 决定）
 
+自 **v0.4.1** 起，GHCR 镜像提供 **linux/amd64** 与 **linux/arm64**（含 arm64 软路由 / NAS）。`latest` 与版本号 tag 均为 multi-arch manifest。
+
 数据目录默认为 `./data`，内含 SQLite 数据库 `quotahub.db` 与服务设置。
 
 
@@ -51,16 +53,16 @@ docker compose up -d --build --force-recreate
 要求：Python >= 3.11，已安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)。
 
 ```bash
-unzip quotahub-v0.4.0-uv.zip
-cd quotahub-v0.4.0
+unzip quotahub-v0.4.1-uv.zip
+cd quotahub-v0.4.1
 ./scripts/start.sh
 ```
 
 Windows（PowerShell）：
 
 ```powershell
-Expand-Archive quotahub-v0.4.0-uv.zip
-cd quotahub-v0.4.0
+Expand-Archive quotahub-v0.4.1-uv.zip
+cd quotahub-v0.4.1
 scripts\start.bat
 ```
 

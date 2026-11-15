@@ -41,6 +41,20 @@ class OllamaAccountUpdate(BaseModel):
     enabled: bool | None = None
 
 
+class MistralAccountCreate(BaseModel):
+    name: str
+    api_key: str
+    show_monthly: bool = True
+    enabled: bool = True
+
+
+class MistralAccountUpdate(BaseModel):
+    name: str | None = None
+    api_key: str | None = None
+    show_monthly: bool | None = None
+    enabled: bool | None = None
+
+
 class RefreshSettingsResponse(BaseModel):
     auto_refresh: bool
     interval_sec: int

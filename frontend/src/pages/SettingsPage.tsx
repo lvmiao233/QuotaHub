@@ -52,16 +52,18 @@ function NumberRow({
 
 function settingsSnapshot(
   refreshOllama: RefreshSettings,
+  refreshMistral: RefreshSettings,
   refreshOpenGo: RefreshSettings,
   usageSync: UsageSyncSettings
 ): string {
-  return JSON.stringify({ refreshOllama, refreshOpenGo, usageSync });
+  return JSON.stringify({ refreshOllama, refreshMistral, refreshOpenGo, usageSync });
 }
 
 export default function SettingsPage() {
   const { reloadRefreshConfig } = useQuota();
   const [config, setConfig] = useState<AppConfigResponse | null>(null);
   const [refreshOllama, setRefreshOllama] = useState<RefreshSettings>({ auto_refresh: true, interval_sec: 300 });
+  const [refreshMistral, setRefreshMistral] = useState<RefreshSettings>({ auto_refresh: true, interval_sec: 300 });
   const [refreshOpenGo, setRefreshOpenGo] = useState<RefreshSettings>({ auto_refresh: true, interval_sec: 60 });
   const [usageSync, setUsageSync] = useState<UsageSyncSettings>({
     auto_sync: true,
@@ -78,9 +80,15 @@ export default function SettingsPage() {
   const applyServerConfig = useCallback((cfg: AppConfigResponse) => {
     setConfig(cfg);
     setRefreshOllama(cfg.refresh.ollama);
+    setRefreshMistral(cfg.refresh.mistral ?? { auto_refresh: true, interval_sec: 300 });
     setRefreshOpenGo(cfg.refresh.opencode_go);
     setUsageSync(cfg.usage_sync);
-    lastSavedRef.current = settingsSnapshot(cfg.refresh.ollama, cfg.refresh.opencode_go, cfg.usage_sync);
+    lastSavedRef.current = settingsSnapshot(
+      cfg.refresh.ollama,
+      cfg.refresh.mistral ?? { auto_refresh: true, interval_sec: 300 },
+      cfg.refresh.opencode_go,
+      cfg.usage_sync
+    );
   }, []);
 
   const load = useCallback(async () => {
@@ -98,7 +106,7 @@ export default function SettingsPage() {
 
   const persist = useCallback(async () => {
     if (savingRef.current) return;
-    const snapshot = settingsSnapshot(refreshOllama, refreshOpenGo, usageSync);
+    const snapshot = settingsSnapshot(refreshOllama, refreshMistral, refreshOpenGo, usageSync);
     if (snapshot === lastSavedRef.current) return;
 
     savingRef.current = true;
@@ -106,6 +114,7 @@ export default function SettingsPage() {
       const updated = await api.updateConfig({
         refresh: {
           ollama: refreshOllama,
+          mistral: refreshMistral,
           opencode_go: refreshOpenGo,
         },
         usage_sync: usageSync,
@@ -118,7 +127,7 @@ export default function SettingsPage() {
     } finally {
       savingRef.current = false;
     }
-  }, [refreshOllama, refreshOpenGo, usageSync, reloadRefreshConfig, applyServerConfig]);
+  }, [refreshOllama, refreshMistral, refreshOpenGo, usageSync, reloadRefreshConfig, applyServerConfig]);
 
   const scheduleSave = useCallback(() => {
     if (!readyRef.current) return;
@@ -135,10 +144,10 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!readyRef.current) return;
-    const snapshot = settingsSnapshot(refreshOllama, refreshOpenGo, usageSync);
+    const snapshot = settingsSnapshot(refreshOllama, refreshMistral, refreshOpenGo, usageSync);
     if (snapshot === lastSavedRef.current) return;
     scheduleSave();
-  }, [refreshOllama, refreshOpenGo, usageSync, scheduleSave]);
+  }, [refreshOllama, refreshMistral, refreshOpenGo, usageSync, scheduleSave]);
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">加载中…</p>;
@@ -180,6 +189,25 @@ export default function SettingsPage() {
             value={refreshOpenGo.interval_sec}
             min={15}
             onChange={(value) => setRefreshOpenGo((prev) => ({ ...prev, interval_sec: value }))}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Mistral 额度自动刷新</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <ToggleRow
+            label="自动刷新"
+            checked={refreshMistral.auto_refresh}
+            onChange={(value) => setRefreshMistral((prev) => ({ ...prev, auto_refresh: value }))}
+          />
+          <NumberRow
+            label="刷新间隔（秒）"
+            value={refreshMistral.interval_sec}
+            min={15}
+            onChange={(value) => setRefreshMistral((prev) => ({ ...prev, interval_sec: value }))}
           />
         </CardContent>
       </Card>

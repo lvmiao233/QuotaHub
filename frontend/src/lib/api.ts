@@ -37,15 +37,28 @@ export interface OllamaAccount {
   updated_at: string;
 }
 
+export interface MistralAccount {
+  id: string;
+  name: string;
+  api_key_masked: string;
+  configured: boolean;
+  show_monthly: boolean;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AppConfigResponse {
   refresh: {
     ollama: RefreshSettings;
     opencode_go: RefreshSettings;
+    mistral: RefreshSettings;
   };
   usage_sync: UsageSyncSettings;
   accounts_imported: boolean;
   opencode_accounts: OpenCodeAccount[];
   ollama_accounts: OllamaAccount[];
+  mistral_accounts: MistralAccount[];
 }
 
 export interface QuotaWindow {
@@ -91,6 +104,8 @@ export interface OllamaQuotaAccount {
   windows?: QuotaWindow[];
   error?: string;
 }
+
+export type MistralQuotaAccount = OllamaQuotaAccount;
 
 export interface UsageRecord {
   usg_id: string;
@@ -198,6 +213,7 @@ export interface ServiceConfigUpdateBody {
   refresh?: {
     ollama?: Partial<RefreshSettings>;
     opencode_go?: Partial<RefreshSettings>;
+    mistral?: Partial<RefreshSettings>;
   };
   usage_sync?: Partial<UsageSyncSettings>;
 }
@@ -223,6 +239,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   quota: () => request<QuotaAccount[]>("/api/quota"),
   ollamaQuota: () => request<OllamaQuotaAccount[]>("/api/ollama/quota"),
+  mistralQuota: () => request<MistralQuotaAccount[]>("/api/mistral/quota"),
   config: () => request<AppConfigResponse>("/api/config"),
   updateConfig: (body: ServiceConfigUpdateBody) =>
     request<AppConfigResponse>("/api/config", {
@@ -298,6 +315,22 @@ export const api = {
     }),
   deleteOllamaAccount: (id: string) =>
     request<{ ok: boolean }>(`/api/accounts/ollama/${id}`, { method: "DELETE" }),
+
+  listMistralAccounts: () => request<MistralAccount[]>("/api/accounts/mistral"),
+  createMistralAccount: (body: Record<string, unknown>) =>
+    request<MistralAccount>("/api/accounts/mistral", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  updateMistralAccount: (id: string, body: Record<string, unknown>) =>
+    request<MistralAccount>(`/api/accounts/mistral/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  deleteMistralAccount: (id: string) =>
+    request<{ ok: boolean }>(`/api/accounts/mistral/${id}`, { method: "DELETE" }),
 };
 
 export function placeholderOpenGoAccounts(accounts: OpenCodeAccount[]): QuotaAccount[] {
@@ -312,6 +345,16 @@ export function placeholderOpenGoAccounts(accounts: OpenCodeAccount[]): QuotaAcc
 }
 
 export function placeholderOllamaAccounts(accounts: OllamaAccount[]): OllamaQuotaAccount[] {
+  return accounts.map((account, index) => ({
+    index,
+    account_id: account.id,
+    name: account.name,
+    success: false,
+    updated_at: "",
+  }));
+}
+
+export function placeholderMistralAccounts(accounts: MistralAccount[]): MistralQuotaAccount[] {
   return accounts.map((account, index) => ({
     index,
     account_id: account.id,

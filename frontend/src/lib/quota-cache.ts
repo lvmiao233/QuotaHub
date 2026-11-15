@@ -1,4 +1,5 @@
 const OLLAMA_KEY = "quotahub:cache:ollama-quota";
+const MISTRAL_KEY = "quotahub:cache:mistral-quota";
 const OPENCODE_KEY = "quotahub:cache:opencode-quota";
 const DAILY_KEY = "quotahub:cache:daily-stats";
 const DAILY_MODEL_KEY = "quotahub:cache:daily-model-stats";
@@ -27,6 +28,14 @@ export function loadOllamaQuotaCache<T>(): T[] | null {
 
 export function saveOllamaQuotaCache(data: unknown[]): void {
   writeJson(OLLAMA_KEY, data);
+}
+
+export function loadMistralQuotaCache<T>(): T[] | null {
+  return readJson<T[]>(MISTRAL_KEY);
+}
+
+export function saveMistralQuotaCache(data: unknown[]): void {
+  writeJson(MISTRAL_KEY, data);
 }
 
 export function loadOpenCodeQuotaCache<T>(): T[] | null {

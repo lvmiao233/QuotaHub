@@ -14,11 +14,21 @@ from pathlib import Path
 from . import db
 from .bootstrap import ensure_bootstrapped
 from .analytics import build_overview
-from .config import load_config, load_service_config, mask_cookie, mask_ollama_cookie, update_service_config
+from .config import (
+    load_config,
+    load_service_config,
+    mask_cookie,
+    mask_mistral_api_key,
+    mask_ollama_cookie,
+    update_service_config,
+)
+from .mistral_quota import fetch_all_mistral_quotas
 from .ollama_quota import fetch_all_ollama_quotas
 from .opencode_usage import resolve_account_workspace_id
 from .quota import build_cookie_header, fetch_all_quotas, fetch_go_status, fetch_quota_for_account
 from .schemas import (
+    MistralAccountCreate,
+    MistralAccountUpdate,
     OllamaAccountCreate,
     OllamaAccountUpdate,
     OpenCodeAccountCreate,
@@ -122,6 +132,20 @@ def _ollama_account_dict(row: db.OllamaAccountRow) -> dict[str, Any]:
     }
 
 
+def _mistral_account_dict(row: db.MistralAccountRow) -> dict[str, Any]:
+    has_key = bool(row.api_key.strip())
+    return {
+        "id": row.id,
+        "name": row.name,
+        "api_key_masked": mask_mistral_api_key(row.api_key),
+        "configured": has_key,
+        "show_monthly": row.show_monthly,
+        "enabled": row.enabled,
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    }
+
+
 def _build_config_response() -> dict[str, Any]:
     service = load_service_config()
     return {
@@ -134,6 +158,10 @@ def _build_config_response() -> dict[str, Any]:
                 "auto_refresh": service.refresh_opencode_go.auto_refresh,
                 "interval_sec": service.refresh_opencode_go.interval_sec,
             },
+            "mistral": {
+                "auto_refresh": service.refresh_mistral.auto_refresh,
+                "interval_sec": service.refresh_mistral.interval_sec,
+            },
         },
         "usage_sync": {
             "auto_sync": service.usage_sync.auto_sync,
@@ -143,9 +171,11 @@ def _build_config_response() -> dict[str, Any]:
         },
         "accounts_imported": db.imported_flag_path().exists()
         or db.count_opencode_accounts() > 0
-        or db.count_ollama_accounts() > 0,
+        or db.count_ollama_accounts() > 0
+        or db.count_mistral_accounts() > 0,
         "opencode_accounts": [_opencode_account_dict(row) for row in db.list_opencode_accounts()],
         "ollama_accounts": [_ollama_account_dict(row) for row in db.list_ollama_accounts()],
+        "mistral_accounts": [_mistral_account_dict(row) for row in db.list_mistral_accounts()],
     }
 
 
@@ -334,6 +364,63 @@ async def delete_ollama_account(account_id: str) -> dict[str, bool]:
     return {"ok": True}
 
 
+@accounts_router.get("/mistral")
+async def list_mistral_accounts() -> list[dict[str, Any]]:
+    return [_mistral_account_dict(row) for row in db.list_mistral_accounts()]
+
+
+@accounts_router.post("/mistral")
+async def create_mistral_account(body: MistralAccountCreate) -> dict[str, Any]:
+    api_key = body.api_key.strip()
+    if not api_key:
+        raise HTTPException(status_code=400, detail="api_key 不能为空")
+    row = db.create_mistral_account(
+        name=body.name.strip() or "Mistral",
+        api_key=api_key,
+        show_monthly=body.show_monthly,
+        enabled=body.enabled,
+    )
+    return _mistral_account_dict(row)
+
+
+@accounts_router.put("/mistral/{account_id}")
+async def update_mistral_account(account_id: str, body: MistralAccountUpdate) -> dict[str, Any]:
+    fields = body.model_dump(exclude_unset=True)
+    if "name" in fields and fields["name"] is not None:
+        fields["name"] = fields["name"].strip() or "Mistral"
+    if "api_key" in fields and fields["api_key"] is not None:
+        fields["api_key"] = fields["api_key"].strip()
+    row = db.update_mistral_account(account_id, **fields)
+    if row is None:
+        raise HTTPException(status_code=404, detail="账号不存在")
+    return _mistral_account_dict(row)
+
+
+@accounts_router.delete("/mistral/{account_id}")
+async def delete_mistral_account(account_id: str) -> dict[str, bool]:
+    if not db.delete_mistral_account(account_id):
+        raise HTTPException(status_code=404, detail="账号不存在")
+    return {"ok": True}
+
+
+@accounts_router.get("/mistral/{account_id}/quota")
+async def mistral_account_quota(account_id: str) -> dict[str, Any]:
+    row = db.get_mistral_account(account_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="账号不存在")
+    from .config import MistralAccountConfig
+
+    account = MistralAccountConfig(
+        name=row.name,
+        api_key=row.api_key,
+        show_monthly=row.show_monthly,
+    )
+    from .mistral_quota import fetch_mistral_quota_for_account
+
+    quota = await fetch_mistral_quota_for_account(account, 0)
+    return quota.to_dict()
+
+
 app.include_router(accounts_router)
 
 
@@ -365,6 +452,32 @@ async def quota() -> list[dict]:
         for row in rows
     ]
     results = await fetch_all_quotas(accounts)
+    id_by_name = {row.name: row.id for row in rows}
+    for item in results:
+        item["account_id"] = id_by_name.get(item.get("name", ""))
+    return results
+
+
+@app.get("/api/mistral/quota")
+async def mistral_quota() -> list[dict]:
+    try:
+        load_config()
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    rows = db.list_mistral_accounts(enabled_only=True)
+    if not rows:
+        return []
+    from .config import MistralAccountConfig
+
+    accounts = [
+        MistralAccountConfig(
+            name=row.name,
+            api_key=row.api_key,
+            show_monthly=row.show_monthly,
+        )
+        for row in rows
+    ]
+    results = await fetch_all_mistral_quotas(accounts)
     id_by_name = {row.name: row.id for row in rows}
     for item in results:
         item["account_id"] = id_by_name.get(item.get("name", ""))

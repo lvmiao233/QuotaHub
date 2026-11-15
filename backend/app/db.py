@@ -70,6 +70,16 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS mistral_accounts (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                session_cookie TEXT NOT NULL,
+                show_monthly INTEGER NOT NULL DEFAULT 1,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS usage_records (
                 usg_id TEXT PRIMARY KEY,
                 account_id TEXT NOT NULL REFERENCES opencode_accounts(id) ON DELETE CASCADE,
@@ -112,6 +122,10 @@ def init_db() -> None:
         )
         try:
             conn.execute("ALTER TABLE usage_sync_state ADD COLUMN logs_cursor TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE mistral_accounts ADD COLUMN api_key TEXT NOT NULL DEFAULT ''")
         except sqlite3.OperationalError:
             pass
 
@@ -166,6 +180,33 @@ class OllamaAccountRow:
             session_cookie=row["session_cookie"],
             show_session=bool(row["show_session"]),
             show_weekly=bool(row["show_weekly"]),
+            enabled=bool(row["enabled"]),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+
+@dataclass
+class MistralAccountRow:
+    id: str
+    name: str
+    session_cookie: str
+    api_key: str
+    show_monthly: bool
+    enabled: bool
+    created_at: str
+    updated_at: str
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> MistralAccountRow:
+        keys = row.keys()
+        api_key = row["api_key"] if "api_key" in keys else ""
+        return cls(
+            id=row["id"],
+            name=row["name"],
+            session_cookie=row["session_cookie"],
+            api_key=api_key or "",
+            show_monthly=bool(row["show_monthly"]),
             enabled=bool(row["enabled"]),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
@@ -451,6 +492,88 @@ def update_ollama_account(account_id: str, **fields: Any) -> OllamaAccountRow | 
 def delete_ollama_account(account_id: str) -> bool:
     with get_conn() as conn:
         cur = conn.execute("DELETE FROM ollama_accounts WHERE id = ?", (account_id,))
+        return cur.rowcount > 0
+
+
+def list_mistral_accounts(*, enabled_only: bool = False) -> list[MistralAccountRow]:
+    with get_conn() as conn:
+        sql = "SELECT * FROM mistral_accounts"
+        if enabled_only:
+            sql += " WHERE enabled = 1"
+        sql += " ORDER BY created_at ASC"
+        rows = conn.execute(sql).fetchall()
+    return [MistralAccountRow.from_row(r) for r in rows]
+
+
+def get_mistral_account(account_id: str) -> MistralAccountRow | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM mistral_accounts WHERE id = ?", (account_id,)
+        ).fetchone()
+    return MistralAccountRow.from_row(row) if row else None
+
+
+def create_mistral_account(
+    *,
+    name: str,
+    api_key: str,
+    show_monthly: bool = True,
+    enabled: bool = True,
+) -> MistralAccountRow:
+    account_id = str(uuid.uuid4())
+    now = _now_iso()
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO mistral_accounts (
+                id, name, session_cookie, api_key, show_monthly, enabled, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                account_id,
+                name,
+                "",
+                api_key,
+                int(show_monthly),
+                int(enabled),
+                now,
+                now,
+            ),
+        )
+    account = get_mistral_account(account_id)
+    assert account is not None
+    return account
+
+
+def update_mistral_account(account_id: str, **fields: Any) -> MistralAccountRow | None:
+    allowed = {"name", "api_key", "show_monthly", "enabled"}
+    updates: list[str] = []
+    values: list[Any] = []
+    for key, value in fields.items():
+        if key not in allowed or value is None:
+            continue
+        if key in {"show_monthly", "enabled"}:
+            value = int(bool(value))
+        updates.append(f"{key} = ?")
+        values.append(value)
+    if not updates:
+        return get_mistral_account(account_id)
+    updates.append("updated_at = ?")
+    values.append(_now_iso())
+    values.append(account_id)
+    with get_conn() as conn:
+        cur = conn.execute(
+            f"UPDATE mistral_accounts SET {', '.join(updates)} WHERE id = ?",
+            values,
+        )
+        if cur.rowcount == 0:
+            return None
+    return get_mistral_account(account_id)
+
+
+def delete_mistral_account(account_id: str) -> bool:
+    with get_conn() as conn:
+        cur = conn.execute("DELETE FROM mistral_accounts WHERE id = ?", (account_id,))
         return cur.rowcount > 0
 
 
@@ -755,3 +878,8 @@ def count_opencode_accounts() -> int:
 def count_ollama_accounts() -> int:
     with get_conn() as conn:
         return int(conn.execute("SELECT COUNT(*) FROM ollama_accounts").fetchone()[0])
+
+
+def count_mistral_accounts() -> int:
+    with get_conn() as conn:
+        return int(conn.execute("SELECT COUNT(*) FROM mistral_accounts").fetchone()[0])

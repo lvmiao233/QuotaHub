@@ -23,7 +23,11 @@ def ensure_settings_migrated() -> None:
 def ensure_accounts_imported() -> None:
     if db.imported_flag_path().exists():
         return
-    if db.count_opencode_accounts() > 0 or db.count_ollama_accounts() > 0:
+    if (
+        db.count_opencode_accounts() > 0
+        or db.count_ollama_accounts() > 0
+        or db.count_mistral_accounts() > 0
+    ):
         db.imported_flag_path().write_text("imported\n", encoding="utf-8")
         return
 
@@ -31,7 +35,7 @@ def ensure_accounts_imported() -> None:
     if not raw:
         return
 
-    opencode_accounts, ollama_accounts = _parse_accounts_from_raw(raw)
+    opencode_accounts, ollama_accounts, mistral_accounts = _parse_accounts_from_raw(raw)
 
     for account in opencode_accounts:
         if not account.auth_cookie.strip():
@@ -55,7 +59,16 @@ def ensure_accounts_imported() -> None:
             show_weekly=account.show_weekly,
         )
 
-    if opencode_accounts or ollama_accounts:
+    for account in mistral_accounts:
+        if not account.api_key.strip():
+            continue
+        db.create_mistral_account(
+            name=account.name,
+            api_key=account.api_key,
+            show_monthly=account.show_monthly,
+        )
+
+    if opencode_accounts or ollama_accounts or mistral_accounts:
         db.imported_flag_path().write_text("imported\n", encoding="utf-8")
 
 

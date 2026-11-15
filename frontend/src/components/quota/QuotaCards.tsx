@@ -109,7 +109,57 @@ function OllamaQuotaWindowRow({ window }: { window: QuotaWindow }) {
         <span>剩余 {Math.round(window.remaining * 10) / 10}%</span>
         <span>{formatResetIn(window.reset_in_sec)}</span>
       </div>
+      {window.status_text ? (
+        <p className="text-xs text-muted-foreground tabular-nums">{window.status_text}</p>
+      ) : null}
     </div>
+  );
+}
+
+export function MistralAccountCard({
+  account,
+  loading,
+}: {
+  account: import("@/lib/api").MistralQuotaAccount;
+  loading?: boolean;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">{account.name}</CardTitle>
+          </div>
+          <div className="flex items-center gap-2">
+            {!loading && account.plan && <Badge variant="default">{formatPlanLabel(account.plan)}</Badge>}
+            <Badge variant={loading ? "default" : account.success ? "success" : "danger"}>
+              {loading ? "加载中" : account.success ? "正常" : "异常"}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading ? (
+          <QuotaLoadingSkeleton rows={1} />
+        ) : (
+          <>
+            {!account.success && account.error && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {account.error}
+              </div>
+            )}
+            {account.windows?.map((window) => (
+              <QuotaWindowRow key={window.label} window={window} />
+            ))}
+            {account.updated_at && (
+              <p className="text-[11px] text-muted-foreground">
+                更新于 {new Date(account.updated_at).toLocaleString("zh-CN")}
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

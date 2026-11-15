@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { Cloud, RefreshCw, Waves } from "lucide-react";
+import { Cloud, RefreshCw, Sparkles, Waves } from "lucide-react";
 import {
+  MistralAccountCard,
   OllamaAccountCard,
   OpenGoAccountCard,
 } from "@/components/quota/QuotaCards";
@@ -72,19 +73,24 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const {
     ollamaAccounts,
+    mistralAccounts,
     openGoAccounts,
     configReady,
     ollamaLoading,
+    mistralLoading,
     openGoLoading,
     ollamaHasData,
+    mistralHasData,
     openGoHasData,
     ollamaError,
+    mistralError,
     openGoError,
     refreshOllama,
+    refreshMistral,
     refreshOpenGo,
   } = useQuota();
 
-  const totalCount = ollamaAccounts.length + openGoAccounts.length;
+  const totalCount = ollamaAccounts.length + mistralAccounts.length + openGoAccounts.length;
   const isEmpty = configReady && totalCount === 0;
 
   if (!configReady) {
@@ -116,7 +122,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-10">
-      {(ollamaError || openGoError) && (
+      {(ollamaError || mistralError || openGoError) && (
         <div className="space-y-2">
           {ollamaError && (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -126,6 +132,11 @@ export default function DashboardPage() {
           {openGoError && (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               OpenCode Go：{openGoError}
+            </div>
+          )}
+          {mistralError && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              Mistral：{mistralError}
             </div>
           )}
         </div>
@@ -175,6 +186,28 @@ export default function DashboardPage() {
                   ? () => navigate(`/accounts/opencode/${account.account_id}`)
                   : undefined
               }
+            />
+          ))}
+        </div>
+      </AccountSection>
+
+      <AccountSection
+        title="Mistral"
+        icon={<Sparkles className="h-4 w-4" />}
+        description="月额度"
+        emptyHint="未配置 Mistral 账号"
+        successCount={mistralAccounts.filter((a) => a.success).length}
+        totalCount={mistralAccounts.length}
+        loading={mistralLoading}
+        hasData={mistralHasData}
+        onRefresh={() => void refreshMistral()}
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {mistralAccounts.map((account) => (
+            <MistralAccountCard
+              key={account.account_id || account.name}
+              account={account}
+              loading={mistralLoading && !mistralHasData}
             />
           ))}
         </div>

@@ -17,6 +17,7 @@ DEFAULT_SETTINGS_PAYLOAD: dict[str, Any] = {
     "refresh": {
         "ollama": {"auto_refresh": True, "interval_sec": 300},
         "opencode_go": {"auto_refresh": True, "interval_sec": 60},
+        "mistral": {"auto_refresh": True, "interval_sec": 300},
     },
     "usage_sync": {
         "auto_sync": True,
@@ -49,6 +50,13 @@ class OllamaAccountConfig:
 
 
 @dataclass
+class MistralAccountConfig:
+    name: str
+    api_key: str = ""
+    show_monthly: bool = True
+
+
+@dataclass
 class RefreshSettings:
     auto_refresh: bool = True
     interval_sec: int = 60
@@ -73,6 +81,7 @@ class ServiceConfig:
     listen_port: int
     refresh_ollama: RefreshSettings
     refresh_opencode_go: RefreshSettings
+    refresh_mistral: RefreshSettings
     opencode: OpenCodeSettings
     usage_sync: UsageSyncSettings
 
@@ -83,8 +92,10 @@ class AppConfig:
     listen_port: int
     opencode_accounts: list[AccountConfig]
     ollama_accounts: list[OllamaAccountConfig]
+    mistral_accounts: list[MistralAccountConfig]
     refresh_ollama: RefreshSettings
     refresh_opencode_go: RefreshSettings
+    refresh_mistral: RefreshSettings
     opencode: OpenCodeSettings
     usage_sync: UsageSyncSettings
 
@@ -241,6 +252,7 @@ def load_service_config() -> ServiceConfig:
         listen_port=listen_port,
         refresh_ollama=_parse_refresh_settings(refresh_raw.get("ollama"), default_interval=300),
         refresh_opencode_go=_parse_refresh_settings(refresh_raw.get("opencode_go"), default_interval=60),
+        refresh_mistral=_parse_refresh_settings(refresh_raw.get("mistral"), default_interval=300),
         opencode=_parse_opencode_settings(settings.get("opencode")),
         usage_sync=_parse_usage_sync_settings(settings.get("usage_sync")),
     )
@@ -283,14 +295,18 @@ def update_service_config(updates: dict[str, Any]) -> ServiceConfig:
     return load_service_config()
 
 
-def _parse_accounts_from_raw(raw: dict[str, Any]) -> tuple[list[AccountConfig], list[OllamaAccountConfig]]:
+def _parse_accounts_from_raw(
+    raw: dict[str, Any],
+) -> tuple[list[AccountConfig], list[OllamaAccountConfig], list[MistralAccountConfig]]:
     import_block = raw.get("import_accounts")
     if isinstance(import_block, dict):
         opencode_accounts_raw = import_block.get("opencode_accounts") or []
         ollama_accounts_raw = import_block.get("ollama_accounts") or []
+        mistral_accounts_raw = import_block.get("mistral_accounts") or []
     else:
         opencode_accounts_raw = raw.get("opencode_accounts") or []
         ollama_accounts_raw = raw.get("ollama_accounts") or []
+        mistral_accounts_raw = raw.get("mistral_accounts") or []
 
     opencode_accounts: list[AccountConfig] = []
     for i, item in enumerate(opencode_accounts_raw):
@@ -319,7 +335,19 @@ def _parse_accounts_from_raw(raw: dict[str, Any]) -> tuple[list[AccountConfig], 
                 show_weekly=bool(item.get("show_weekly", True)),
             )
         )
-    return opencode_accounts, ollama_accounts
+
+    mistral_accounts: list[MistralAccountConfig] = []
+    for i, item in enumerate(mistral_accounts_raw):
+        if not isinstance(item, dict):
+            continue
+        mistral_accounts.append(
+            MistralAccountConfig(
+                name=str(item.get("name") or f"mistral-{i + 1}"),
+                api_key=str(item.get("api_key") or "").strip(),
+                show_monthly=bool(item.get("show_monthly", True)),
+            )
+        )
+    return opencode_accounts, ollama_accounts, mistral_accounts
 
 
 def load_config() -> AppConfig:
@@ -330,6 +358,7 @@ def load_config() -> AppConfig:
     service = load_service_config()
     opencode_rows = db.list_opencode_accounts()
     ollama_rows = db.list_ollama_accounts()
+    mistral_rows = db.list_mistral_accounts()
 
     opencode_accounts = [
         AccountConfig(
@@ -353,14 +382,25 @@ def load_config() -> AppConfig:
         for row in ollama_rows
         if row.enabled
     ]
+    mistral_accounts = [
+        MistralAccountConfig(
+            name=row.name,
+            api_key=row.api_key,
+            show_monthly=row.show_monthly,
+        )
+        for row in mistral_rows
+        if row.enabled
+    ]
 
     return AppConfig(
         listen_host=service.listen_host,
         listen_port=service.listen_port,
         opencode_accounts=opencode_accounts,
         ollama_accounts=ollama_accounts,
+        mistral_accounts=mistral_accounts,
         refresh_ollama=service.refresh_ollama,
         refresh_opencode_go=service.refresh_opencode_go,
+        refresh_mistral=service.refresh_mistral,
         opencode=service.opencode,
         usage_sync=service.usage_sync,
     )
@@ -391,6 +431,10 @@ def mask_cookie(cookie: str) -> str:
                 auth = part[5:]
                 break
     return _mask_secret(auth, "auth=")
+
+
+def mask_mistral_api_key(api_key: str) -> str:
+    return _mask_secret(api_key.strip(), "api_key=")
 
 
 def mask_ollama_cookie(cookie: str) -> str:

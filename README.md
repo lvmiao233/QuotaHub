@@ -1,6 +1,6 @@
 # QuotaHub
 
-由于 OpenCode Go 和 Ollama 多账号使用时查看额度不太方便，Vibe了一个小工具从各平台 Dashboard 抓取并展示账号额度。
+由于 OpenCode Go、Ollama、Mistral 多账号使用时查看额度不太方便，做了一个小工具从各平台抓取并展示账号额度。
 
 
 ## 致谢
@@ -51,16 +51,16 @@ docker compose up -d --build --force-recreate
 要求：Python >= 3.11，已安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)。
 
 ```bash
-unzip quotahub-v0.3.0-uv.zip
-cd quotahub-v0.3.0
+unzip quotahub-v0.4.0-uv.zip
+cd quotahub-v0.4.0
 ./scripts/start.sh
 ```
 
 Windows（PowerShell）：
 
 ```powershell
-Expand-Archive quotahub-v0.3.0-uv.zip
-cd quotahub-v0.3.0
+Expand-Archive quotahub-v0.4.0-uv.zip
+cd quotahub-v0.4.0
 scripts\start.bat
 ```
 
@@ -123,6 +123,15 @@ volumes:
 - **Ollama**：若额度解析失败，确认 Cookie 仍有效；settings 页 DOM 变更已在 v0.3.0 适配。
 
 
+### 从 v0.3.x 升级
+
+升级到 **v0.4.0** 时，启动后会自动迁移 SQLite（新增 `mistral_accounts` 等）。原有 Ollama / OpenCode 数据与设置保留。
+
+- **Mistral（新）**：在「账号管理 → Mistral」添加账号，填写 [console.mistral.ai](https://console.mistral.ai) 创建的 API Key（需有组织用量查看权限）。仅支持 API Key 拉取月额度，不使用浏览器 Cookie。
+- **数据概览**：支持 Mistral 月额度汇总展示；仪表盘渠道顺序为 Ollama → OpenCode Go → Mistral。
+- 使用 Docker 时换镜像：`docker pull ghcr.io/lvmiao233/quotahub:0.4.0` 后重建容器；`./data` 卷无需改动。
+
+
 ## 配置说明
 
 运行时**不再依赖** `config.json`，配置在「设置」页面修改，后续变更将保存到 SQLite。
@@ -156,18 +165,28 @@ volumes:
 | Session Cookie | 登录 [ollama.com/settings](https://ollama.com/settings) 后，复制 `aid=…` 与 `__Secure-session=…`（整段 Cookie 或仅 session 值均可） |
 
 
+### Mistral 账号（UI：账号 → Mistral）
+
+| 字段 | 填什么 |
+|------|--------|
+| API Key | 在 [console.mistral.ai](https://console.mistral.ai) 创建，需具备组织用量（billing）查看权限；用于 `GET /v1/billing/budget` 查询合并月额度 |
+
+
 ## API 概览
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/quota` | 所有 OpenCode 账号额度 |
 | GET | `/api/ollama/quota` | 所有 Ollama 账号额度 |
+| GET | `/api/mistral/quota` | 所有 Mistral 账号额度 |
 | GET/POST | `/api/accounts/opencode` | OpenCode 账号列表 / 新增 |
 | PUT/DELETE | `/api/accounts/opencode/{id}` | 更新 / 删除 |
 | GET | `/api/accounts/opencode/{id}/usage` | 读本地使用记录 |
 | POST | `/api/accounts/opencode/{id}/usage/sync` | 增量同步 |
 | POST | `/api/accounts/opencode/{id}/usage/backfill` | 补拉历史 |
 | GET/POST | `/api/accounts/ollama` | Ollama 账号 CRUD |
+| GET/POST | `/api/accounts/mistral` | Mistral 账号 CRUD |
+| PUT/DELETE | `/api/accounts/mistral/{id}` | Mistral 更新 / 删除 |
 | GET/PUT | `/api/config` | 读取 / 更新服务设置 |
 
 完整 UI：数据概览、账号额度、调用日志、账号管理、设置。

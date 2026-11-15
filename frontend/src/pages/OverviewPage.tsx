@@ -3,6 +3,7 @@ import { BarChart3, RefreshCw, Table2 } from "lucide-react";
 import {
   HorizontalModelBar,
   ModelLegend,
+  QuotaCycleBarsGrid,
   StackedDailyBarChart,
 } from "@/components/charts/ModelCharts";
 import { useQuota } from "@/contexts/QuotaContext";
@@ -26,6 +27,7 @@ import {
 import {
   aggregateOllamaModelsByWindow,
   aggregateOpenCodeModelsByCost,
+  computeMistralCycleRemaining,
   computeOllamaCycleRemaining,
   computeOpenCodeCycleRemaining,
 } from "@/lib/quota-stats";
@@ -161,10 +163,13 @@ function DailyStatsCard({
 export default function OverviewPage() {
   const {
     ollamaAccounts,
+    mistralAccounts,
     openGoAccounts,
     ollamaHasData,
+    mistralHasData,
     openGoHasData,
     ollamaLoading,
+    mistralLoading,
     openGoLoading,
     refreshAll,
   } = useQuota();
@@ -186,6 +191,10 @@ export default function OverviewPage() {
   const opencodeCycles = useMemo(
     () => computeOpenCodeCycleRemaining(openGoAccounts),
     [openGoAccounts]
+  );
+  const mistralCycles = useMemo(
+    () => computeMistralCycleRemaining(mistralAccounts),
+    [mistralAccounts]
   );
 
   const sessionModels = useMemo(
@@ -251,7 +260,8 @@ export default function OverviewPage() {
     void loadDaily();
   }, [loadDaily]);
 
-  const quotaRefreshing = ollamaLoading || openGoLoading;
+  const quotaRefreshing = ollamaLoading || mistralLoading || openGoLoading;
+  const anyQuotaData = ollamaHasData || mistralHasData || openGoHasData;
 
   return (
     <div className="relative space-y-6 pb-16">
@@ -265,25 +275,27 @@ export default function OverviewPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Ollama 模型次数统计</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-5">
+        <CardContent>
           {!ollamaHasData ? (
             <p className="py-4 text-center text-sm text-muted-foreground">等待额度数据…</p>
           ) : sessionModels.length === 0 && weeklyModels.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">暂无模型数据</p>
           ) : (
-            <>
-              {ollamaCycles.map((cycle) => (
-                <HorizontalModelBar
-                  key={cycle.label}
-                  label={cycle.displayLabel}
-                  used={cycle.used}
-                  total={cycle.total}
-                  models={ollamaCycleModels[cycle.label] ?? []}
-                  colorMap={ollamaColorMap}
-                />
-              ))}
+            <div className="space-y-0">
+              <QuotaCycleBarsGrid count={ollamaCycles.length}>
+                {ollamaCycles.map((cycle) => (
+                  <HorizontalModelBar
+                    key={cycle.label}
+                    label={cycle.displayLabel}
+                    used={cycle.used}
+                    total={cycle.total}
+                    models={ollamaCycleModels[cycle.label] ?? []}
+                    colorMap={ollamaColorMap}
+                  />
+                ))}
+              </QuotaCycleBarsGrid>
               <ModelLegend models={ollamaModelNames} colorMap={ollamaColorMap} />
-            </>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -292,30 +304,58 @@ export default function OverviewPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">OpenCode 模型金额统计</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-5">
+        <CardContent>
           {!openGoHasData ? (
             <p className="py-4 text-center text-sm text-muted-foreground">等待额度数据…</p>
           ) : opencodeCycles.every((c) => c.total === 0) ? (
             <p className="py-4 text-center text-sm text-muted-foreground">暂无额度数据</p>
           ) : (
-            <>
-              {opencodeCycles.map((cycle) => (
-                <HorizontalModelBar
-                  key={cycle.label}
-                  label={cycle.displayLabel}
-                  used={cycle.used}
-                  total={cycle.total}
-                  models={opencodeCostModels}
-                  colorMap={opencodeColorMap}
-                />
-              ))}
+            <div className="space-y-0">
+              <QuotaCycleBarsGrid count={opencodeCycles.length}>
+                {opencodeCycles.map((cycle) => (
+                  <HorizontalModelBar
+                    key={cycle.label}
+                    label={cycle.displayLabel}
+                    used={cycle.used}
+                    total={cycle.total}
+                    models={opencodeCostModels}
+                    colorMap={opencodeColorMap}
+                  />
+                ))}
+              </QuotaCycleBarsGrid>
               {opencodeCostModels.length > 0 && (
                 <ModelLegend
                   models={opencodeCostModels.map((m) => m.model)}
                   colorMap={opencodeColorMap}
                 />
               )}
-            </>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Mistral 额度汇总</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!mistralHasData ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">等待额度数据…</p>
+          ) : mistralCycles.every((c) => c.total === 0) ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">暂无额度数据</p>
+          ) : (
+            <QuotaCycleBarsGrid count={mistralCycles.length}>
+              {mistralCycles.map((cycle) => (
+                <HorizontalModelBar
+                  key={cycle.label}
+                  label={cycle.displayLabel}
+                  used={cycle.used}
+                  total={cycle.total}
+                  models={[]}
+                  colorMap={new Map()}
+                />
+              ))}
+            </QuotaCycleBarsGrid>
           )}
         </CardContent>
       </Card>
@@ -348,7 +388,7 @@ export default function OverviewPage() {
           void refreshAll();
           void loadDaily();
         }}
-        disabled={quotaRefreshing && !ollamaHasData}
+        disabled={quotaRefreshing && !anyQuotaData}
         title="刷新"
       >
         <RefreshCw className={`h-5 w-5 ${quotaRefreshing ? "animate-spin" : ""}`} />

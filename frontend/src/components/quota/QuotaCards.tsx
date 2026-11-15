@@ -5,6 +5,7 @@ import {
   formatResetIn,
   buildModelColorMap,
   ollamaQuotaLabel,
+  ollamaStatusTextVisible,
   opencodeBlockedLabel,
   progressTone,
   quotaLabel,
@@ -109,8 +110,8 @@ function OllamaQuotaWindowRow({ window }: { window: QuotaWindow }) {
         <span>剩余 {Math.round(window.remaining * 10) / 10}%</span>
         <span>{formatResetIn(window.reset_in_sec)}</span>
       </div>
-      {window.status_text ? (
-        <p className="text-xs text-muted-foreground tabular-nums">{window.status_text}</p>
+      {ollamaStatusTextVisible(window.status_text ?? "") ? (
+        <p className="text-xs text-muted-foreground">{window.status_text}</p>
       ) : null}
     </div>
   );

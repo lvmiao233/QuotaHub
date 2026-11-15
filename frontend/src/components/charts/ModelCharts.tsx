@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import type { OllamaModelUsage } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 export function ModelLegend({
   models,
@@ -10,7 +12,7 @@ export function ModelLegend({
   if (models.length === 0) return null;
   const sorted = [...models].sort();
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-2 pt-3">
+    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 pt-3.5">
       {sorted.map((model) => (
         <div key={model} className="flex items-center gap-1.5 text-xs text-slate-600">
           <span
@@ -22,6 +24,16 @@ export function ModelLegend({
       ))}
     </div>
   );
+}
+
+export function QuotaCycleBarsGrid({ count, children }: { count: number; children: ReactNode }) {
+  const gridClass =
+    count >= 3
+      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+      : count === 2
+        ? "grid-cols-1 md:grid-cols-2"
+        : "grid-cols-1";
+  return <div className={cn("grid w-full gap-x-4 gap-y-3.5", gridClass)}>{children}</div>;
 }
 
 export function HorizontalModelBar({
@@ -44,11 +56,11 @@ export function HorizontalModelBar({
   const fillWidth = showUsage ? Math.max(0, Math.min(100, (used / total) * 100)) : 100;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-sm">
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-sm">
         <span className="font-medium text-slate-700">{label}</span>
         {showUsage ? (
-          <span className="tabular-nums text-slate-600">
+          <span className="shrink-0 tabular-nums text-xs text-slate-600">
             已用 {round1(used)}/{round1(total)}%
           </span>
         ) : (
@@ -104,11 +116,11 @@ export function HorizontalCostModelBar({
   const fillWidth = showUsage ? Math.max(0, Math.min(100, (used / total) * 100)) : 100;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-sm">
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-sm">
         <span className="font-medium text-slate-700">{label}</span>
         {showUsage && (
-          <span className="tabular-nums text-slate-600">
+          <span className="shrink-0 tabular-nums text-xs text-slate-600">
             已用 {round1(used)}/{round1(total)}%
           </span>
         )}

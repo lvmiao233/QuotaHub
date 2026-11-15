@@ -1,4 +1,4 @@
-import type { OllamaModelUsage, OllamaQuotaAccount, QuotaAccount } from "@/lib/api";
+import type { MistralQuotaAccount, OllamaModelUsage, OllamaQuotaAccount, QuotaAccount } from "@/lib/api";
 import { applyOpenCodeCascade } from "@/lib/utils";
 
 export type CycleQuota = {
@@ -17,6 +17,10 @@ const OLLAMA_CYCLES: Array<{ label: string; displayLabel: string }> = [
 const OPENCODE_CYCLES: Array<{ label: string; displayLabel: string }> = [
   { label: "5h Rolling", displayLabel: "5 小时滚动" },
   { label: "Weekly", displayLabel: "周额度" },
+  { label: "Monthly", displayLabel: "月额度" },
+];
+
+const MISTRAL_CYCLES: Array<{ label: string; displayLabel: string }> = [
   { label: "Monthly", displayLabel: "月额度" },
 ];
 
@@ -95,6 +99,33 @@ export function computeOllamaCycleRemaining(accounts: OllamaQuotaAccount[]): Cyc
 
 export function computeOpenCodeCycleRemaining(accounts: QuotaAccount[]): CycleQuota[] {
   return OPENCODE_CYCLES.map(({ label }) => sumOpenCodeCycle(accounts, label));
+}
+
+function sumMistralCycle(accounts: MistralQuotaAccount[], label: string): CycleQuota {
+  let remaining = 0;
+  let total = 0;
+
+  for (const account of accounts) {
+    if (!account.success) continue;
+    const window = account.windows?.find((w) => w.label === label);
+    if (!window) continue;
+    total += 100;
+    remaining += window.remaining;
+  }
+
+  remaining = round1(remaining);
+  total = round1(total);
+  return {
+    label,
+    displayLabel: MISTRAL_CYCLES.find((c) => c.label === label)?.displayLabel ?? label,
+    remaining,
+    total,
+    used: round1(Math.max(0, total - remaining)),
+  };
+}
+
+export function computeMistralCycleRemaining(accounts: MistralQuotaAccount[]): CycleQuota[] {
+  return MISTRAL_CYCLES.map(({ label }) => sumMistralCycle(accounts, label));
 }
 
 export function aggregateOllamaModelsByWindow(

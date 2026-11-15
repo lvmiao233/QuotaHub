@@ -45,6 +45,14 @@ export function ollamaQuotaLabel(label: string): string {
   }
 }
 
+/** Ollama 页面会带回与「已用 x%」重复的英文周期文案，仅保留有限额提示等有用信息。 */
+export function ollamaStatusTextVisible(statusText: string): boolean {
+  const text = statusText.trim();
+  if (!text) return false;
+  if (/^\d+(\.\d+)?%\s*used$/i.test(text)) return false;
+  return true;
+}
+
 export function formatPlanLabel(plan: string): string {
   const trimmed = plan.trim();
   if (!trimmed) return trimmed;
